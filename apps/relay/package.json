@@ -1,0 +1,6 @@
+{
+    "name": "relay",
+    "scripts": {
+        "dev": "cargo watch -x run"
+    }
+}
