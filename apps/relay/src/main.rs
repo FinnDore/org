@@ -1,49 +1,52 @@
 mod org_client;
 
-use std::{borrow::BorrowMut, sync::Arc};
+use std::{
+    borrow::{Borrow, BorrowMut},
+    sync::Arc,
+    time::Duration,
+};
 
 use axum::{
     extract::{
-        ws::{WebSocket, WebSocketUpgrade},
-        Path,
+        ws::{Message, WebSocket, WebSocketUpgrade},
+        Path, State,
     },
     http::{status, HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::get,
     Extension, Router,
 };
-use org_client::Orgs;
-use tokio::sync::Mutex;
+use org_client::{add_client_to_org, Orgs};
+use tokio::sync::{Mutex, RwLock};
 
-use crate::org_client::{add_client_to_org, Org};
-struct State {
+use crate::org_client::Org;
+struct TheState {
     pub orgs: Orgs,
     pub auth_token: String,
 }
 
-type SharedState = Arc<Mutex<State>>;
+type SharedState = Arc<RwLock<TheState>>;
 
 async fn client_handler(
     ws: WebSocketUpgrade,
     Path(org_id): Path<String>,
-    Extension(state): Extension<SharedState>,
+    State(state): State<SharedState>,
 ) -> Response {
     println!("New client connected to org: {:?}", org_id);
     ws.on_upgrade(|socket| handle_client_socket(socket, org_id, state))
 }
 
 async fn handle_client_socket(socket: WebSocket, org_id: String, state: SharedState) {
-    let mut state = state.lock().await;
-    let orgs = state.orgs.borrow_mut();
-    add_client_to_org(orgs, org_id, socket);
+    let orgs = &mut state.blocking_write().orgs;
+    add_client_to_org(orgs, org_id, socket).await;
 }
 
 async fn game_handler(
     ws: WebSocketUpgrade,
     Path(org_id): Path<String>,
-    Extension(state): Extension<SharedState>,
+    State(state): State<SharedState>,
     headers: HeaderMap,
-) -> Response {
+) -> impl IntoResponse {
     let auth_header = headers.get("Authorization");
     if auth_header.is_none() {
         return status::StatusCode::UNAUTHORIZED.into_response();
@@ -54,7 +57,7 @@ async fn game_handler(
         return status::StatusCode::UNAUTHORIZED.into_response();
     }
 
-    // let current_state = &state.lock().await;
+    // let current_state = state.as_ref().read().await;
     if ("" != auth_token.unwrap()) {
         return status::StatusCode::UNAUTHORIZED.into_response();
     }
@@ -71,15 +74,17 @@ async fn handle_game_socket(mut socket: WebSocket, org_id: String, state: Shared
         }
 
         let msg = msg.unwrap();
-        let mut state = state.lock().await;
-        let orgs = state.orgs.borrow_mut();
-
-        if let Some(current_org) = orgs.orgs.get_mut(&org_id) {
-            for client in &mut current_org.clients {
+        let current_state = &mut state.blocking_write().orgs;
+        let mut current_orgs = current_state.orgs.lock().await;
+        if let Some(org) = current_orgs.get_mut(&org_id) {
+            // TODO dont block here
+            for client in &mut org.clients {
                 if let Err(err) = client.send(msg.clone()).await {
                     println!("Error sending message: {:?}", err);
                 };
             }
+        } else {
+            println!("Cannot send message org not found: {:?}", org_id);
         }
     }
 }
@@ -87,22 +92,26 @@ async fn handle_game_socket(mut socket: WebSocket, org_id: String, state: Shared
 #[tokio::main]
 async fn main() {
     let auth_token = std::env::var("AUTH_TOKEN").expect("AUTH_TOKEN env var set");
-
+    let state = Arc::new(RwLock::new(TheState {
+        orgs: Orgs::new(),
+        auth_token,
+    }));
     let app = Router::new()
         .route("/sub/:org", get(client_handler))
-        .route("/game/:org", get(game_handler));
+        .route("/game/:org", get(game_handler))
+        .with_state(state);
     let port = std::env::var("PORT").unwrap_or("3001".to_string());
     let host = format!("0.0.0.0:{:}", port);
     println!("Running server on {:}", host);
 
-    let state = Arc::new(Mutex::new(State {
-        orgs: Orgs::new(),
-        auth_token,
-    }));
+    // let state = RwLock::new(State {
+    //     orgs: Orgs::new(),
+    //     auth_token,
+    // });
 
     // run our app with hyper, listening globally on port 3000
     let listener = tokio::net::TcpListener::bind(host).await.unwrap();
-    axum::serve(listener, app.layer(Extension(state)).into_make_service())
+    axum::serve(listener, app.into_make_service())
         .await
         .unwrap();
 }
