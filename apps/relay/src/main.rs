@@ -7,7 +7,8 @@ use axum::{
         ws::{WebSocket, WebSocketUpgrade},
         Path,
     },
-    response::Response,
+    http::{status, HeaderMap, StatusCode},
+    response::{IntoResponse, Response},
     routing::get,
     Extension, Router,
 };
@@ -17,6 +18,7 @@ use tokio::sync::Mutex;
 use crate::org_client::{add_client_to_org, Org};
 struct State {
     pub orgs: Orgs,
+    pub auth_token: String,
 }
 
 type SharedState = Arc<Mutex<State>>;
@@ -40,19 +42,35 @@ async fn game_handler(
     ws: WebSocketUpgrade,
     Path(org_id): Path<String>,
     Extension(state): Extension<SharedState>,
+    headers: HeaderMap,
 ) -> Response {
+    let auth_header = headers.get("Authorization");
+    if auth_header.is_none() {
+        return status::StatusCode::UNAUTHORIZED.into_response();
+    }
+
+    let auth_token = auth_header.unwrap().to_str();
+    if auth_token.is_err() {
+        return status::StatusCode::UNAUTHORIZED.into_response();
+    }
+
+    // let current_state = &state.lock().await;
+    if ("" != auth_token.unwrap()) {
+        return status::StatusCode::UNAUTHORIZED.into_response();
+    }
+
     println!("New game server connected to org: {:?}", org_id);
     ws.on_upgrade(|socket| handle_game_socket(socket, org_id, state))
 }
 
 async fn handle_game_socket(mut socket: WebSocket, org_id: String, state: SharedState) {
     while let Some(msg) = socket.recv().await {
-        let msg = if let Ok(msg) = msg {
-            msg
-        } else {
-            // client disconnected
+        if let Err(err) = msg {
+            println!("Error receiving message: {:?}", err);
             return;
-        };
+        }
+
+        let msg = msg.unwrap();
         let mut state = state.lock().await;
         let orgs = state.orgs.borrow_mut();
 
@@ -68,6 +86,8 @@ async fn handle_game_socket(mut socket: WebSocket, org_id: String, state: Shared
 
 #[tokio::main]
 async fn main() {
+    let auth_token = std::env::var("AUTH_TOKEN").expect("AUTH_TOKEN env var set");
+
     let app = Router::new()
         .route("/sub/:org", get(client_handler))
         .route("/game/:org", get(game_handler));
@@ -75,7 +95,11 @@ async fn main() {
     let host = format!("0.0.0.0:{:}", port);
     println!("Running server on {:}", host);
 
-    let state = Arc::new(Mutex::new(State { orgs: Orgs::new() }));
+    let state = Arc::new(Mutex::new(State {
+        orgs: Orgs::new(),
+        auth_token,
+    }));
+
     // run our app with hyper, listening globally on port 3000
     let listener = tokio::net::TcpListener::bind(host).await.unwrap();
     axum::serve(listener, app.layer(Extension(state)).into_make_service())
