@@ -1,23 +1,19 @@
 mod org_client;
 
-use std::{
-    borrow::{Borrow, BorrowMut},
-    sync::Arc,
-    time::Duration,
-};
+use std::sync::Arc;
 
 use axum::{
     extract::{
-        ws::{Message, WebSocket, WebSocketUpgrade},
+        ws::{WebSocket, WebSocketUpgrade},
         Path, State,
     },
-    http::{status, HeaderMap, StatusCode},
+    http::{status, HeaderMap},
     response::{IntoResponse, Response},
     routing::get,
-    Extension, Router,
+    Router,
 };
-use org_client::{add_client_to_org, Orgs};
-use tokio::sync::{Mutex, RwLock};
+use org_client::Orgs;
+use tokio::sync::RwLock;
 
 use crate::org_client::Org;
 struct TheState {
@@ -83,11 +79,24 @@ async fn handle_game_socket(mut socket: WebSocket, org_id: String, state: Shared
         let current_state = &mut state.write().await.orgs;
         let mut current_orgs = current_state.orgs.lock().await;
         if let Some(org) = current_orgs.get_mut(&org_id) {
+            let mut clients_to_disconect: Vec<usize> = vec![];
             // TODO dont block here
+            let mut i: usize = 0;
             for client in &mut org.clients {
                 if let Err(err) = client.send(msg.clone()).await {
                     println!("Error sending message: {:?}", err);
+                    // TODO can we do this when the client disconnects?
+                    clients_to_disconect.push(i);
                 };
+                i += 1;
+            }
+            for i in clients_to_disconect {
+                println!("Removing client: {:?}", i);
+                let removed_client = org.clients.remove(i);
+                // TODO dont block here
+                if let Err(err) = removed_client.close().await {
+                    println!("Error closing client: {:?}", err);
+                }
             }
         } else {
             println!("Cannot send message org not found: {:?}", org_id);
@@ -109,11 +118,6 @@ async fn main() {
     let port = std::env::var("PORT").unwrap_or("3001".to_string());
     let host = format!("0.0.0.0:{:}", port);
     println!("Running server on {:}", host);
-
-    // let state = RwLock::new(State {
-    //     orgs: Orgs::new(),
-    //     auth_token,
-    // });
 
     // run our app with hyper, listening globally on port 3000
     let listener = tokio::net::TcpListener::bind(host).await.unwrap();

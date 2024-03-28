@@ -1,7 +1,7 @@
-use std::{borrow::BorrowMut, collections::HashMap};
+use std::{collections::HashMap};
 
-use axum::extract::ws::{Message, WebSocket};
-use tokio::sync::{Mutex, RwLock};
+use axum::extract::ws::{WebSocket};
+use tokio::sync::{Mutex};
 
 pub struct Orgs {
     pub orgs: Mutex<HashMap<String, Org>>,
@@ -21,10 +21,6 @@ pub struct Org {
 
 impl Org {
     pub fn new(clients: Vec<WebSocket>) -> Self {
-        Self { clients: clients }
+        Self { clients }
     }
 }
-
-pub async fn add_client_to_org(mut orgs: &Orgs, org_id: String, client: WebSocket) {}
-
-async fn send_event_to_clients(orgs: &mut Orgs, org_name: String, event: String) {}
