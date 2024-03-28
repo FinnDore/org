@@ -37,8 +37,14 @@ async fn client_handler(
 }
 
 async fn handle_client_socket(socket: WebSocket, org_id: String, state: SharedState) {
-    let orgs = &mut state.blocking_write().orgs;
-    add_client_to_org(orgs, org_id, socket).await;
+    let current_state = &mut state.write().await.orgs;
+    let mut current_orgs = current_state.orgs.lock().await;
+    if let Some(org) = current_orgs.get_mut(&org_id) {
+        org.clients.push(socket);
+    } else {
+        let org = Org::new(vec![socket]);
+        current_orgs.insert(org_id, org);
+    }
 }
 
 async fn game_handler(
@@ -57,8 +63,8 @@ async fn game_handler(
         return status::StatusCode::UNAUTHORIZED.into_response();
     }
 
-    // let current_state = state.as_ref().read().await;
-    if ("" != auth_token.unwrap()) {
+    // let current_state = state.read().await;
+    if std::env::var("AUTH_TOKEN").expect("AUTH_TOKEN env var set") != auth_token.unwrap() {
         return status::StatusCode::UNAUTHORIZED.into_response();
     }
 
@@ -74,7 +80,7 @@ async fn handle_game_socket(mut socket: WebSocket, org_id: String, state: Shared
         }
 
         let msg = msg.unwrap();
-        let current_state = &mut state.blocking_write().orgs;
+        let current_state = &mut state.write().await.orgs;
         let mut current_orgs = current_state.orgs.lock().await;
         if let Some(org) = current_orgs.get_mut(&org_id) {
             // TODO dont block here
