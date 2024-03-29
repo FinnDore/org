@@ -1,26 +1,35 @@
-use std::{collections::HashMap};
+use std::{collections::HashMap, sync::Arc};
 
-use axum::extract::ws::{WebSocket};
-use tokio::sync::{Mutex};
+use axum::extract::ws::{Message};
+use tokio::sync::{mpsc::UnboundedSender, Mutex, RwLock};
 
-pub struct Orgs {
-    pub orgs: Mutex<HashMap<String, Org>>,
+pub struct Org {
+    pub clients: Vec<Client>,
 }
 
-impl Orgs {
-    pub fn new() -> Self {
+impl Org {
+    pub fn new(clients: Vec<Client>) -> Self {
+        Self { clients }
+    }
+}
+
+pub struct Client {
+    pub client_id: usize,
+    pub tx: UnboundedSender<Message>,
+}
+
+pub struct TheState {
+    pub orgs: Mutex<HashMap<String, Org>>,
+    pub auth_token: String,
+}
+
+impl TheState {
+    pub fn new(auth_token: String) -> Self {
         Self {
             orgs: Mutex::new(HashMap::new()),
+            auth_token,
         }
     }
 }
 
-pub struct Org {
-    pub clients: Vec<WebSocket>,
-}
-
-impl Org {
-    pub fn new(clients: Vec<WebSocket>) -> Self {
-        Self { clients }
-    }
-}
+pub type SharedState = Arc<RwLock<TheState>>;
