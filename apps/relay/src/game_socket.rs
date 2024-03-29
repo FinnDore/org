@@ -1,16 +1,14 @@
-
-
 use axum::{
     extract::{
         ws::{WebSocket, WebSocketUpgrade},
         Path, State,
     },
     http::{status, HeaderMap},
-    response::{IntoResponse},
+    response::IntoResponse,
 };
+use tokio_tungstenite::tungstenite::client;
 
-
-use crate::org_client::{SharedState};
+use crate::org_client::SharedState;
 
 pub async fn game_handler(
     ws: WebSocketUpgrade,
@@ -49,6 +47,11 @@ pub async fn handle_game_socket(mut socket: WebSocket, org_id: String, state: Sh
         let mut current_orgs = orgs.lock().await;
         if let Some(org) = current_orgs.get_mut(&org_id) {
             // TODO dont block here
+            println!(
+                "Sending message to org: {} {} connected clients",
+                org_id,
+                org.clients.len()
+            );
             for client in &mut org.clients {
                 if let Err(err) = client.tx.send(msg.clone()) {
                     println!(
@@ -58,7 +61,7 @@ pub async fn handle_game_socket(mut socket: WebSocket, org_id: String, state: Sh
                 }
             }
         } else {
-            println!("Cannot send message org not found: {:?}", org_id);
+            println!("Cannot send message connected clients found: {:?}", org_id);
         }
     }
 }
