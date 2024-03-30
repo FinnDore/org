@@ -15,7 +15,7 @@ pub async fn game_handler(
     State(state): State<SharedState>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
-    let auth_header = headers.get("Authorization");
+    let auth_header = headers.get("authorization");
     if auth_header.is_none() {
         info!(org_id, "Failed to connect no auth header found");
         return status::StatusCode::UNAUTHORIZED.into_response();

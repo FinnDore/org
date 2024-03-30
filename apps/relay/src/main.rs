@@ -4,7 +4,7 @@ mod org_client;
 mod util;
 
 use std::sync::Arc;
-use tracing::{info, level_filters::LevelFilter, subscriber};
+use tracing::{info, level_filters::LevelFilter};
 use tracing_subscriber;
 
 use crate::{client_socket::client_handler, game_socket::game_handler, org_client::TheState};
