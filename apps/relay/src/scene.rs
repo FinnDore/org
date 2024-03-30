@@ -8,6 +8,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::sync::{mpsc::UnboundedSender, Mutex, RwLock};
+use tracing::{info, instrument};
 
 use crate::{SharedState, TheState};
 
@@ -55,6 +56,7 @@ pub fn create_test_scene() -> Scene {
 }
 
 pub async fn get_scene(State(state): State<SharedState>) -> Response {
+    info!("Getting scene");
     let scene = state.read().await.scene.read().await.clone();
     Json(scene).into_response()
 }
