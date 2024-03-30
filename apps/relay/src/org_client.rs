@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use axum::extract::ws::{Message};
+use axum::extract::ws::Message;
 use tokio::sync::{mpsc::UnboundedSender, Mutex, RwLock};
 
 pub struct Org {

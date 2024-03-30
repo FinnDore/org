@@ -6,7 +6,6 @@ use axum::{
     http::{status, HeaderMap},
     response::IntoResponse,
 };
-use tokio_tungstenite::tungstenite::client;
 
 use crate::org_client::SharedState;
 
@@ -26,10 +25,11 @@ pub async fn game_handler(
         return status::StatusCode::UNAUTHORIZED.into_response();
     }
 
-    // let current_state = state.read().await;
-    if std::env::var("AUTH_TOKEN").expect("AUTH_TOKEN env var set") != auth_token.unwrap() {
+    let current_state = state.read().await;
+    if current_state.auth_token != auth_token.unwrap() {
         return status::StatusCode::UNAUTHORIZED.into_response();
     }
+    drop(current_state);
 
     println!("New game server connected to org: {:?}", org_id);
     ws.on_upgrade(|socket| handle_game_socket(socket, org_id, state))
@@ -46,7 +46,6 @@ pub async fn handle_game_socket(mut socket: WebSocket, org_id: String, state: Sh
         let orgs = &mut state.write().await.orgs;
         let mut current_orgs = orgs.lock().await;
         if let Some(org) = current_orgs.get_mut(&org_id) {
-            // TODO dont block here
             println!(
                 "Sending message to org: {} {} connected clients",
                 org_id,
