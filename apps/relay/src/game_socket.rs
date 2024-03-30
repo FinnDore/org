@@ -15,21 +15,22 @@ pub async fn game_handler(
     State(state): State<SharedState>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
-    let auth_header = headers.get("authorization");
-    if auth_header.is_none() {
-        info!(org_id, "Failed to connect no auth header found");
-        return status::StatusCode::UNAUTHORIZED.into_response();
-    }
-
-    let auth_token = auth_header.unwrap().to_str();
-    if auth_token.is_err() {
-        info!(org_id, "Failed to connect auth header is not a string");
-        return status::StatusCode::UNAUTHORIZED.into_response();
-    }
+    let auth_header = headers
+        .get("authorization")
+        .map(|header| header.to_str().ok())
+        .flatten();
 
     let current_state = state.read().await;
-    if current_state.auth_token != auth_token.unwrap() {
-        info!(org_id, "Failed to connect auth header is incorrect");
+    if auth_header.is_none() || current_state.auth_token != auth_header.unwrap() {
+        info!(
+            org_id,
+            "Failed to connect auth header is {}",
+            if auth_header.is_none() {
+                "missing"
+            } else {
+                "invalid"
+            }
+        );
         return status::StatusCode::UNAUTHORIZED.into_response();
     }
 
