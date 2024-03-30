@@ -11,8 +11,9 @@ use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tracing::{error, info};
 
 use crate::{
-    org_client::{Client, Org, SharedState},
+    org::{Client, Org},
     util::ErrorFormatter,
+    SharedState,
 };
 use futures_util::{future::select_all, sink::SinkExt, stream::StreamExt};
 

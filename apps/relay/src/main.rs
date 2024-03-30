@@ -1,16 +1,37 @@
 mod client_socket;
 mod game_socket;
-mod org_client;
+mod org;
+mod scene;
 mod util;
 
-use std::sync::Arc;
+use org::Org;
+use scene::Scene;
+use std::{collections::HashMap, sync::Arc};
 use tracing::{info, level_filters::LevelFilter};
 use tracing_subscriber;
 
-use crate::{client_socket::client_handler, game_socket::game_handler, org_client::TheState};
+use crate::{client_socket::client_handler, game_socket::game_handler, scene::get_scene};
 use axum::{routing::get, Router};
 
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
+
+pub struct TheState {
+    pub auth_token: String,
+    pub orgs: Mutex<HashMap<String, Org>>,
+    pub scene: RwLock<Scene>,
+}
+
+impl TheState {
+    pub fn new(auth_token: String) -> Self {
+        Self {
+            orgs: Mutex::new(HashMap::new()),
+            scene: RwLock::new(scene::create_test_scene()),
+            auth_token,
+        }
+    }
+}
+
+pub type SharedState = Arc<RwLock<TheState>>;
 
 #[tokio::main]
 async fn main() {
@@ -31,8 +52,10 @@ async fn main() {
     let app = Router::new()
         .route("/sub/:org", get(client_handler))
         .route("/game/:org", get(game_handler))
+        .route("/scene/:org", get(get_scene))
         .with_state(state);
-    let port = std::env::var("PORT").unwrap_or("3001".to_string());
+
+    let port = std::env::var("PORT").unwrap_or("3002".to_string());
     let host = format!("0.0.0.0:{}", port);
     info!("Running server on {}", host);
 

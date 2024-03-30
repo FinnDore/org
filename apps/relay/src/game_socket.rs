@@ -1,4 +1,4 @@
-use crate::{org_client::SharedState, util::ErrorFormatter};
+use crate::{util::ErrorFormatter, SharedState};
 use axum::{
     extract::{
         ws::{WebSocket, WebSocketUpgrade},
