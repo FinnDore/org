@@ -1,6 +1,6 @@
 {
     "name": "relay",
     "scripts": {
-        "dev": "AUTH_TOKEN=1 cargo watch -x run"
+        "dev": "envroment=development AUTH_TOKEN=1 cargo watch -x run"
     }
 }

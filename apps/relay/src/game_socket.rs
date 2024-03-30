@@ -1,3 +1,4 @@
+use crate::{org_client::SharedState, util::ErrorFormatter};
 use axum::{
     extract::{
         ws::{WebSocket, WebSocketUpgrade},
@@ -6,8 +7,7 @@ use axum::{
     http::{status, HeaderMap},
     response::IntoResponse,
 };
-
-use crate::org_client::SharedState;
+use tracing::{error, info};
 
 pub async fn game_handler(
     ws: WebSocketUpgrade,
@@ -31,14 +31,14 @@ pub async fn game_handler(
     }
     drop(current_state);
 
-    println!("New game server connected to org: {:?}", org_id);
+    info!(org_id, "New game server connected");
     ws.on_upgrade(|socket| handle_game_socket(socket, org_id, state))
 }
 
 pub async fn handle_game_socket(mut socket: WebSocket, org_id: String, state: SharedState) {
     while let Some(msg) = socket.recv().await {
         if let Err(err) = msg {
-            println!("Error receiving message: {:?}", err);
+            error!("Error receiving message {}", err);
             return;
         }
 
@@ -46,21 +46,18 @@ pub async fn handle_game_socket(mut socket: WebSocket, org_id: String, state: Sh
         let orgs = &mut state.write().await.orgs;
         let mut current_orgs = orgs.lock().await;
         if let Some(org) = current_orgs.get_mut(&org_id) {
-            println!(
-                "Sending message to org: {} {} connected clients",
-                org_id,
-                org.clients.len()
-            );
             for client in &mut org.clients {
                 if let Err(err) = client.tx.send(msg.clone()) {
-                    println!(
-                        "Error producing message to client {}: {:?}",
-                        client.client_id, err
+                    error!(
+                        client_id = client.client_id,
+                        client.client_id,
+                        error = ErrorFormatter::format_ws_send_error(err),
+                        "Error producing message to client"
                     );
                 }
             }
         } else {
-            println!("Cannot send message connected clients found: {:?}", org_id);
+            info!(org_id, "Cannot send message no connected clients found");
         }
     }
 }
