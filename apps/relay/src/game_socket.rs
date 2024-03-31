@@ -1,8 +1,14 @@
-use std::{sync::Arc, vec};
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    vec,
+};
 
 use crate::{
     org::{self, Org},
-    scene::{self, create_test_scene, SceneUpdate},
+    scene::{self, create_test_scene, SceneUpdate, SceneUpdateType},
     util::ErrorFormatter,
     SharedState,
 };
@@ -15,13 +21,13 @@ use axum::{
     response::IntoResponse,
     Error,
 };
-use futures_util::{future::select_all, stream::Count, StreamExt, TryStreamExt};
+use futures_util::future::select_all;
 use rand::Rng;
 use tokio::{select, sync::Mutex, time::sleep};
 use tracing::{error, info};
 
-const MESSAGE_THROTTLE_MS: u64 = 50;
-const SIM_THROTTLE_MS: u64 = 25;
+const MESSAGE_THROTTLE_MS: u64 = 105;
+const SIM_THROTTLE_MS: u64 = 105;
 
 pub async fn game_handler(
     ws: WebSocketUpgrade,
@@ -190,6 +196,8 @@ struct Simualtion {
     scene: scene::Scene,
 }
 
+static DID_COLOR: AtomicBool = AtomicBool::new(false);
+
 async fn recv_simulation_frame(simulation: &mut Simualtion) -> Option<Result<Message, Error>> {
     sleep(std::time::Duration::from_millis(SIM_THROTTLE_MS)).await;
 
@@ -204,16 +212,37 @@ async fn recv_simulation_frame(simulation: &mut Simualtion) -> Option<Result<Mes
     }
 
     let item = item_to_update.unwrap();
-    item.rotation.1 += 0.2;
-    item.rotation.2 += 0.2;
-    let update_msg = Message::Text(
-        serde_json::to_string(&SceneUpdate {
-            object_id: item_index_to_update.to_string(),
-            path: "rotation".into(),
-            value: item.rotation,
-        })
-        .unwrap(),
-    );
-
-    Some(Ok(update_msg))
+    let update_color = DID_COLOR
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |val| Some(!val))
+        .unwrap();
+    match update_color {
+        true => {
+            item.color.increment();
+            Some(Ok(Message::Text(
+                serde_json::to_string(&SceneUpdate {
+                    object_id: item_index_to_update.to_string(),
+                    path: "color".into(),
+                    value: SceneUpdateType::Color(item.color),
+                })
+                .unwrap(),
+            )))
+        }
+        false => {
+            item.rotation.1 += 0.2;
+            item.rotation.2 += 0.2;
+            Some(Ok(Message::Text(
+                serde_json::to_string(&SceneUpdate {
+                    object_id: item_index_to_update.to_string(),
+                    path: "rotation".into(),
+                    value: SceneUpdateType::Rotation(vec![
+                        item.rotation.0,
+                        item.rotation.1,
+                        item.rotation.2,
+                    ]),
+                })
+                .unwrap(),
+            )))
+        }
+        _ => None,
+    }
 }

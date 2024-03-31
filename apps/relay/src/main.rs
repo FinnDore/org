@@ -1,5 +1,7 @@
 mod client_socket;
+mod color;
 mod game_socket;
+mod hex;
 mod org;
 mod scene;
 mod util;
@@ -8,7 +10,6 @@ use org::Org;
 use scene::Scene;
 use std::{collections::HashMap, sync::Arc};
 use tracing::{info, level_filters::LevelFilter};
-
 
 use crate::{client_socket::client_handler, game_socket::game_handler, scene::get_scene};
 use axum::{routing::get, Router};
