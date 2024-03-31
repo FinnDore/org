@@ -24,8 +24,7 @@ pub async fn game_handler(
 ) -> impl IntoResponse {
     let auth_header = headers
         .get("authorization")
-        .map(|header| header.to_str().ok())
-        .flatten();
+        .and_then(|header| header.to_str().ok());
 
     let current_state = state.read().await;
     if auth_header.is_none() || current_state.auth_token != auth_header.unwrap() {
@@ -49,7 +48,7 @@ pub async fn game_handler(
 
 async fn handle_game_socket(mut socket: WebSocket, org_id: String, state: SharedState) {
     let state_gaurd = state.read().await;
-    let is_simulation = state_gaurd.simulation.clone();
+    let is_simulation = state_gaurd.simulation;
     drop(state_gaurd);
 
     let mut sim = Simualtion {
