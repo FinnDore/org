@@ -45,18 +45,18 @@ pub fn create_test_scene() -> Scene {
                 position: (0.0, 0.0, 0.0),
                 rotation: (0.0, 0.0, 0.0),
             },
-            SceneItem {
-                id: "1".into(),
-                mesh_type: MeshType::Cube,
-                position: (3.0, 1.0, 1.0),
-                rotation: (1.0, 1.0, 1.0),
-            },
-            SceneItem {
-                id: "2".into(),
-                mesh_type: MeshType::Cylinder,
-                position: (-2.0, -2.0, 1.0),
-                rotation: (1.0, 1.0, 1.0),
-            },
+            // SceneItem {
+            //     id: "1".into(),
+            //     mesh_type: MeshType::Cube,
+            //     position: (3.0, 1.0, 1.0),
+            //     rotation: (1.0, 1.0, 1.0),
+            // },
+            // SceneItem {
+            //     id: "2".into(),
+            //     mesh_type: MeshType::Cylinder,
+            //     position: (-2.0, -2.0, 1.0),
+            //     rotation: (1.0, 1.0, 1.0),
+            // },
         ],
     }
 }

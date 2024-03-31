@@ -17,16 +17,18 @@ use tokio::sync::{Mutex, RwLock};
 
 pub struct TheState {
     pub auth_token: String,
+    pub simulation: bool,
     pub orgs: Mutex<HashMap<String, Org>>,
     pub scene: RwLock<Scene>,
 }
 
 impl TheState {
-    pub fn new(auth_token: String) -> Self {
+    pub fn new(auth_token: String, simulation: bool) -> Self {
         Self {
             orgs: Mutex::new(HashMap::new()),
             scene: RwLock::new(scene::create_test_scene()),
             auth_token,
+            simulation,
         }
     }
 }
@@ -47,7 +49,8 @@ async fn main() {
     };
 
     let auth_token = std::env::var("AUTH_TOKEN").expect("AUTH_TOKEN env var set");
-    let state = Arc::new(RwLock::new(TheState::new(auth_token)));
+    let simulation = std::env::var("SIMULATE").unwrap_or_default() == "true";
+    let state = Arc::new(RwLock::new(TheState::new(auth_token, simulation)));
 
     let app = Router::new()
         .route("/sub/:org", get(client_handler))
