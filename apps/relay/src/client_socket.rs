@@ -24,7 +24,8 @@ pub async fn client_handler(
     Path(org_id): Path<String>,
     State(state): State<SharedState>,
 ) -> Response {
-    info!(org_id, "New client connected");
+    // TODO log ip here
+    info!(org_id, "Client establishing connection");
     ws.on_upgrade(|socket| handle_client_socket(socket, org_id, state))
 }
 
@@ -34,20 +35,20 @@ async fn handle_client_socket(ws: WebSocket, org_id: String, state: SharedState)
         mpsc::unbounded_channel();
     let client_id = CLIENT_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
-    // TODO log ip here
     info!(org_id, client_id, "New client connected");
 
     let ctx_gaurd = state.as_ref().write().await;
     let mut current_orgs = ctx_gaurd.orgs.lock().await;
     current_orgs
         .entry(org_id.clone())
-        .or_insert_with(|| Org::new(vec![]))
+        .or_insert_with(|| Org::new(vec![], true, org_id.clone()))
         .clients
         .push(Client { tx, client_id });
 
     drop(current_orgs);
     drop(ctx_gaurd);
 
+    let state_for_message_task = state.clone();
     let org_id_for_message_task = org_id.clone();
     let message_task = tokio::spawn(async move {
         while let Some(msg) = incoming_messages_rx.recv().await {
@@ -62,11 +63,22 @@ async fn handle_client_socket(ws: WebSocket, org_id: String, state: SharedState)
                         );
                     }
                 }
+                Message::Close(_) => {
+                    info!(
+                        org_id = org_id_for_message_task,
+                        client_id, "Client disconnected",
+                    );
+
+                    remove_client(&org_id_for_message_task, client_id, state_for_message_task)
+                        .await;
+                    return;
+                }
                 _ => continue,
             };
         }
     });
 
+    let state_for_disconnect_task = state.clone();
     let org_id_for_disconnect_task = org_id.clone();
     let disconnect_task = tokio::spawn(async move {
         while let Some(msg) = ws_rx.next().await {
@@ -76,6 +88,12 @@ async fn handle_client_socket(ws: WebSocket, org_id: String, state: SharedState)
                         org_id = org_id_for_disconnect_task,
                         client_id, "Client disconnected",
                     );
+                    remove_client(
+                        &org_id_for_disconnect_task,
+                        client_id,
+                        state_for_disconnect_task,
+                    )
+                    .await;
                     return;
                 }
                 Ok(Message::Text(incoming_message)) => {
@@ -119,5 +137,16 @@ async fn handle_client_socket(ws: WebSocket, org_id: String, state: SharedState)
     let mut current_orgs = ctx_gaurd.orgs.lock().await;
     if let Some(org) = current_orgs.get_mut(&org_id) {
         org.clients.retain(|client| client.client_id != client_id);
+    }
+}
+
+async fn remove_client(org_id: &String, client_id: usize, state: SharedState) {
+    let ctx_gaurd = state.write().await;
+    let mut current_orgs = ctx_gaurd.orgs.lock().await;
+    if let Some(org) = current_orgs.get_mut(org_id) {
+        org.clients.retain(|client| client.client_id != client_id);
+        if org.clients.len() == 0 {
+            current_orgs.remove(org_id);
+        }
     }
 }

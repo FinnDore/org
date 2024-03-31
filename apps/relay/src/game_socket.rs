@@ -1,7 +1,7 @@
 use std::{sync::Arc, vec};
 
 use crate::{
-    org,
+    org::{self, Org},
     scene::{self, create_test_scene, SceneUpdate},
     util::ErrorFormatter,
     SharedState,
@@ -15,9 +15,9 @@ use axum::{
     response::IntoResponse,
     Error,
 };
-use futures_util::future::select_all;
+use futures_util::{future::select_all, stream::Count, StreamExt, TryStreamExt};
 use rand::Rng;
-use tokio::{sync::Mutex, time::sleep};
+use tokio::{select, sync::Mutex, time::sleep};
 use tracing::{error, info};
 
 const MESSAGE_THROTTLE_MS: u64 = 50;
@@ -54,13 +54,14 @@ pub async fn game_handler(
 }
 
 async fn handle_game_socket(mut socket: WebSocket, org_id: String, state: SharedState) {
+    // TODO reject new connections
     let state_gaurd = state.read().await;
     state_gaurd
         .orgs
         .lock()
         .await
         .entry(org_id.clone())
-        .or_insert_with(|| org::Org::new(vec![]));
+        .or_insert_with(|| org::Org::new(vec![], true, org_id.clone()));
 
     let is_simulation = state_gaurd.simulation;
     drop(state_gaurd);
@@ -68,6 +69,7 @@ async fn handle_game_socket(mut socket: WebSocket, org_id: String, state: Shared
     let message_backlog: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec::Vec::new()));
     let message_backlog_for_send_task = message_backlog.clone();
 
+    let state_for_send_updates_task = state.clone();
     let org_id_for_recv_task = org_id.clone();
     let send_updates_task = tokio::spawn(async move {
         loop {
@@ -79,25 +81,22 @@ async fn handle_game_socket(mut socket: WebSocket, org_id: String, state: Shared
                 .collect::<Vec<String>>()
                 .join(",");
 
-            let message_to_send = Message::Text(format!("[{}]", messages));
-            let state_gaurd = state.read().await;
-            let current_orgs = state_gaurd.orgs.lock().await;
-            let org = current_orgs.get(&org_id_for_recv_task);
-            if org.is_none() {
-                info!(org_id_for_recv_task, "Org not found");
+            if messages.is_empty() {
                 continue;
             }
 
-            for client in org.unwrap().clients.iter() {
-                if let Err(err) = client.tx.send(message_to_send.clone()) {
-                    error!(
-                        org_id = org_id_for_recv_task,
-                        client_id = client.client_id,
-                        error = ErrorFormatter::format_ws_send_error(err),
-                        "Error producing message to client"
-                    );
-                }
+            let message_to_send = Message::Text(format!("[{}]", messages));
+            let state_gaurd = state_for_send_updates_task.read().await;
+            let current_orgs = &mut state_gaurd.orgs.lock().await;
+            let org = current_orgs.get_mut(&org_id_for_recv_task);
+            if org.is_none() {
+                info!(
+                    org_id_for_recv_task,
+                    "Org not found cannot send message exiting"
+                );
+                return;
             }
+            send_message_to_client(org.unwrap(), message_to_send).await
         }
     });
 
@@ -107,34 +106,53 @@ async fn handle_game_socket(mut socket: WebSocket, org_id: String, state: Shared
             scene: create_test_scene(),
         };
         loop {
-            // TODO we still need to handle server disconnects
             let msg = match is_simulation {
-                true => recv_simulation_frame(&mut sim).await,
+                true => {
+                    select! {
+                        r = recv_simulation_frame(&mut sim) => r,
+                        r= socket.recv() => r
+                    }
+                }
                 false => socket.recv().await,
             };
 
-            if msg.is_none() {
-                info!(
-                    org_id = org_id_for_message_task,
-                    "Cannot recive message from simulation or gameserver"
-                );
-                continue;
-            };
+            match msg {
+                Some(Ok(Message::Text(text))) => {
+                    let _ = &mut message_backlog_for_send_task.lock().await.push(text);
+                }
+                Some(Ok(close_msg @ Message::Close(_))) => {
+                    info!(org_id_for_message_task, "Game server disconnected");
+                    let state_gaurd = state.read().await;
+                    let current_orgs = &mut state_gaurd.orgs.lock().await;
+                    let org = current_orgs.get_mut(&org_id_for_message_task);
+                    if org.is_none() {
+                        info!(org_id_for_message_task, "Org not found cannot send message");
+                        return;
+                    }
 
-            let msg = msg.unwrap();
-            if let Err(err) = msg {
-                error!(
-                    org_id = org_id_for_message_task,
-                    error = ErrorFormatter::format_axum_error(err),
-                    "Error receiving message from simulation or gameserver"
-                );
-                continue;
+                    let org = org.unwrap();
+                    if org.clients.is_empty() {
+                        println!("Removing org");
+                        current_orgs.remove(&org_id_for_message_task);
+                    } else {
+                        println!("not org");
+                        org.server_connected = false;
+                        send_message_to_client(org, close_msg).await;
+                    }
+
+                    break;
+                }
+                Some(Err(err)) => {
+                    error!(
+                        org_id = org_id_for_message_task,
+                        error = ErrorFormatter::format_axum_error(err),
+                        "Error receiving message from simulation or gameserver"
+                    );
+                }
+                Some(Ok(_)) => {}
+                None => {}
             }
-            if let Message::Text(text) = msg.unwrap() {
-                let _ = &mut message_backlog_for_send_task.lock().await.push(text);
-            } else {
-                info!(org_id_for_message_task, "Received non-text message");
-            }
+            // TODO We can probbaly coalce updates into a single containing the final state
         }
     });
     let remaining_tasks = match select_all(vec![send_updates_task, recv_messages_task]).await {
@@ -153,8 +171,19 @@ async fn handle_game_socket(mut socket: WebSocket, org_id: String, state: Shared
     for task in remaining_tasks {
         task.abort();
     }
+}
 
-    // TODO handle cleanup of orphan tasks
+async fn send_message_to_client(org: &mut Org, message: Message) -> () {
+    for client in org.clients.iter() {
+        if let Err(err) = client.tx.send(message.clone()) {
+            error!(
+                org_id = org.id,
+                client_id = client.client_id,
+                error = ErrorFormatter::format_ws_send_error(err),
+                "Error producing message to client"
+            );
+        }
+    }
 }
 
 struct Simualtion {
@@ -163,6 +192,7 @@ struct Simualtion {
 
 async fn recv_simulation_frame(simulation: &mut Simualtion) -> Option<Result<Message, Error>> {
     sleep(std::time::Duration::from_millis(SIM_THROTTLE_MS)).await;
+
     let item_index_to_update = {
         let mut rng = rand::thread_rng();
         rng.gen_range(0..simulation.scene.items.len())
