@@ -24,6 +24,7 @@ pub async fn client_handler(
     Path(org_id): Path<String>,
     State(state): State<SharedState>,
 ) -> Response {
+    info!(org_id, "New client connected");
     ws.on_upgrade(|socket| handle_client_socket(socket, org_id, state))
 }
 

@@ -40,19 +40,33 @@ pub fn create_test_scene() -> Scene {
         name: "test scene".to_string(),
         items: vec![
             SceneItem {
-                id: "1".into(),
+                id: "0".into(),
                 mesh_type: MeshType::Cube,
                 position: (0.0, 0.0, 0.0),
                 rotation: (0.0, 0.0, 0.0),
             },
             SceneItem {
+                id: "1".into(),
+                mesh_type: MeshType::Cube,
+                position: (3.0, 1.0, 1.0),
+                rotation: (1.0, 1.0, 1.0),
+            },
+            SceneItem {
                 id: "2".into(),
-                mesh_type: MeshType::Sphere,
-                position: (1.0, 1.0, 1.0),
+                mesh_type: MeshType::Cylinder,
+                position: (-2.0, -2.0, 1.0),
                 rotation: (1.0, 1.0, 1.0),
             },
         ],
     }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all(serialize = "camelCase"))]
+pub struct SceneUpdate {
+    pub object_id: String,
+    pub path: String,
+    pub value: (f32, f32, f32),
 }
 
 pub async fn get_scene(State(state): State<SharedState>) -> Response {
