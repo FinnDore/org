@@ -105,7 +105,7 @@ async fn handle_client_socket(ws: WebSocket, org_id: String, state: SharedState)
                 client_id,
                 index,
                 error = ErrorFormatter::format_join_error(err),
-                "Error in ws handling task, error"
+                "Error in ws handling task"
             );
             remaining
         }

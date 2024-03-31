@@ -1,4 +1,7 @@
+use std::{sync::Arc, vec};
+
 use crate::{
+    org,
     scene::{self, create_test_scene, SceneUpdate},
     util::ErrorFormatter,
     SharedState,
@@ -12,9 +15,13 @@ use axum::{
     response::IntoResponse,
     Error,
 };
+use futures_util::future::select_all;
 use rand::Rng;
-use tokio::time::sleep;
+use tokio::{sync::Mutex, time::sleep};
 use tracing::{error, info};
+
+const MESSAGE_THROTTLE_MS: u64 = 50;
+const SIM_THROTTLE_MS: u64 = 25;
 
 pub async fn game_handler(
     ws: WebSocketUpgrade,
@@ -48,54 +55,106 @@ pub async fn game_handler(
 
 async fn handle_game_socket(mut socket: WebSocket, org_id: String, state: SharedState) {
     let state_gaurd = state.read().await;
+    state_gaurd
+        .orgs
+        .lock()
+        .await
+        .entry(org_id.clone())
+        .or_insert_with(|| org::Org::new(vec![]));
+
     let is_simulation = state_gaurd.simulation;
     drop(state_gaurd);
 
-    let mut sim = Simualtion {
-        scene: create_test_scene(),
-    };
-    println!("Simulation: {:?}", is_simulation);
+    let message_backlog: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec::Vec::new()));
+    let message_backlog_for_send_task = message_backlog.clone();
 
-    loop {
-        let msg = match is_simulation {
-            true => recv_simulation_frame(&mut sim).await,
-            false => socket.recv().await,
-        };
+    let org_id_for_recv_task = org_id.clone();
+    let send_updates_task = tokio::spawn(async move {
+        loop {
+            sleep(std::time::Duration::from_millis(MESSAGE_THROTTLE_MS)).await;
+            let messages = &message_backlog
+                .lock()
+                .await
+                .drain(..)
+                .collect::<Vec<String>>()
+                .join(",");
 
-        if msg.is_none() {
-            info!(
-                org_id,
-                "Cannot recive message from simulation or gameserver"
-            );
-            return;
-        };
+            let message_to_send = Message::Text(format!("[{}]", messages));
+            let state_gaurd = state.read().await;
+            let current_orgs = state_gaurd.orgs.lock().await;
+            let org = current_orgs.get(&org_id_for_recv_task);
+            if org.is_none() {
+                info!(org_id_for_recv_task, "Org not found");
+                continue;
+            }
 
-        let msg = msg.unwrap();
-        if let Err(err) = msg {
-            error!(
-                org_id,
-                error = ErrorFormatter::format_axum_error(err),
-                "Error receiving message from simulation or gameserver"
-            );
-            return;
-        }
-        let update_msg = msg.unwrap();
-
-        let state_gaurd = &mut state.write().await;
-        let mut current_orgs = state_gaurd.orgs.lock().await;
-        if let Some(org) = current_orgs.get_mut(&org_id) {
-            for client in &mut org.clients {
-                if let Err(err) = client.tx.send(update_msg.clone()) {
+            for client in org.unwrap().clients.iter() {
+                if let Err(err) = client.tx.send(message_to_send.clone()) {
                     error!(
+                        org_id = org_id_for_recv_task,
                         client_id = client.client_id,
-                        client.client_id,
                         error = ErrorFormatter::format_ws_send_error(err),
                         "Error producing message to client"
                     );
                 }
             }
         }
+    });
+
+    let org_id_for_message_task = org_id.clone();
+    let recv_messages_task = tokio::spawn(async move {
+        let mut sim = Simualtion {
+            scene: create_test_scene(),
+        };
+        loop {
+            // TODO we still need to handle server disconnects
+            let msg = match is_simulation {
+                true => recv_simulation_frame(&mut sim).await,
+                false => socket.recv().await,
+            };
+
+            if msg.is_none() {
+                info!(
+                    org_id = org_id_for_message_task,
+                    "Cannot recive message from simulation or gameserver"
+                );
+                continue;
+            };
+
+            let msg = msg.unwrap();
+            if let Err(err) = msg {
+                error!(
+                    org_id = org_id_for_message_task,
+                    error = ErrorFormatter::format_axum_error(err),
+                    "Error receiving message from simulation or gameserver"
+                );
+                continue;
+            }
+            if let Message::Text(text) = msg.unwrap() {
+                let _ = &mut message_backlog_for_send_task.lock().await.push(text);
+            } else {
+                info!(org_id_for_message_task, "Received non-text message");
+            }
+        }
+    });
+    let remaining_tasks = match select_all(vec![send_updates_task, recv_messages_task]).await {
+        (Ok(_), _, remaining) => remaining,
+        (Err(err), index, remaining) => {
+            error!(
+                org_id,
+                index,
+                error = ErrorFormatter::format_join_error(err),
+                "Error in gamerserver handling task"
+            );
+            remaining
+        }
+    };
+
+    for task in remaining_tasks {
+        task.abort();
     }
+
+    // TODO handle cleanup of orphan tasks
 }
 
 struct Simualtion {
@@ -103,6 +162,7 @@ struct Simualtion {
 }
 
 async fn recv_simulation_frame(simulation: &mut Simualtion) -> Option<Result<Message, Error>> {
+    sleep(std::time::Duration::from_millis(SIM_THROTTLE_MS)).await;
     let item_index_to_update = {
         let mut rng = rand::thread_rng();
         rng.gen_range(0..simulation.scene.items.len())
@@ -110,7 +170,6 @@ async fn recv_simulation_frame(simulation: &mut Simualtion) -> Option<Result<Mes
     let item_to_update = simulation.scene.items.get_mut(item_index_to_update);
 
     if item_to_update.is_none() {
-        sleep(std::time::Duration::from_millis(5)).await;
         return Some(Err(Error::new("No items in scene")));
     }
 
@@ -126,6 +185,5 @@ async fn recv_simulation_frame(simulation: &mut Simualtion) -> Option<Result<Mes
         .unwrap(),
     );
 
-    sleep(std::time::Duration::from_millis(50)).await;
     Some(Ok(update_msg))
 }
