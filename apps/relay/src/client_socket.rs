@@ -145,7 +145,7 @@ async fn remove_client(org_id: &String, client_id: usize, state: SharedState) {
     let mut current_orgs = ctx_gaurd.orgs.lock().await;
     if let Some(org) = current_orgs.get_mut(org_id) {
         org.clients.retain(|client| client.client_id != client_id);
-        if org.clients.len() == 0 {
+        if org.clients.len() == 0 && !org.server_connected {
             current_orgs.remove(org_id);
         }
     }
