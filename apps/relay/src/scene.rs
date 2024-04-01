@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use tracing::info;
 
 use crate::{
-    color::{self, Color},
+    data::color::{self, Color},
     SharedState,
 };
 
@@ -38,7 +38,7 @@ pub enum MeshType {
 
 pub fn create_test_scene() -> Scene {
     Scene {
-        name: "test scene".to_string(),
+        name: "test scene".into(),
         items: vec![
             SceneItem {
                 id: "0".into(),

@@ -5,7 +5,7 @@ use nom::{
     IResult, Parser,
 };
 
-use crate::color::Color;
+use crate::data::color::Color;
 
 fn from_hex(input: &str) -> Result<u8, core::num::ParseIntError> {
     u8::from_str_radix(input, 16)

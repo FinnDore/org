@@ -1,9 +1,8 @@
 use core::fmt;
-use std::{error::Error, string};
 
 use serde::{de::Visitor, Deserialize, Serialize, Serializer};
 
-use crate::hex;
+use crate::data::hex;
 
 #[derive(Debug, Copy)]
 pub struct Color {
@@ -109,7 +108,7 @@ impl<'de> Visitor<'de> for ColorVisitor {
     type Value = Color;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("a color")
+        formatter.write_str("a string representing a color in hex format (#RRGGBB)")
     }
 
     fn visit_str<E>(self, v: &str) -> Result<Color, E>

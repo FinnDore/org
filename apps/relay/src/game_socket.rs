@@ -76,69 +76,19 @@ async fn handle_game_socket(socket: WebSocket, org_id: String, state: SharedStat
     drop(orgs);
     drop(state_gaurd);
 
-    let message_backlog: Arc<Mutex<Vec<SceneUpdate>>> = Arc::new(Mutex::new(vec::Vec::new()));
-    let message_backlog_for_recv = message_backlog.clone();
+    let pending_messages: Arc<Mutex<Vec<SceneUpdate>>> = Arc::new(Mutex::new(vec::Vec::new()));
 
-    let state_for_send_updates_task = state.clone();
-    let org_id_for_recv_task = org_id.clone();
-    let send_updates_task = tokio::spawn(async move {
-        loop {
-            sleep(std::time::Duration::from_millis(MESSAGE_THROTTLE_MS)).await;
-            let messages = &message_backlog
-                .lock()
-                .await
-                .drain(..)
-                .fold(Vec::new(), |mut acc: Vec<SceneUpdate>, incoming_update| {
-                    if let Some(_) = acc.iter().find(|x| x.id == incoming_update.id) {
-                        acc.into_iter()
-                            .map(|mut current_update| {
-                                if current_update.id == incoming_update.id {
-                                    current_update.position =
-                                        incoming_update.position.or(current_update.position);
-                                    current_update.rotation =
-                                        incoming_update.rotation.or(current_update.rotation);
-                                    current_update.color =
-                                        incoming_update.color.or(current_update.color);
-                                }
-                                current_update
-                            })
-                            .collect()
-                    } else {
-                        acc.push(incoming_update);
-                        acc
-                    }
-                })
-                .iter()
-                .map(|x| serde_json::to_string(x).expect("Failed to serialize message"))
-                .collect::<Vec<String>>()
-                .join(",");
+    let send_updates_task = tokio::spawn(send_message_task(
+        org_id.clone(),
+        state.clone(),
+        pending_messages.clone(),
+    ));
 
-            if messages.is_empty() {
-                continue;
-            }
-
-            let message_to_send = Message::Text(format!("[{}]", messages));
-            let state_gaurd = state_for_send_updates_task.read().await;
-            let current_orgs = &mut state_gaurd.orgs.lock().await;
-            let org = current_orgs.get_mut(&org_id_for_recv_task);
-            if org.is_none() {
-                info!(
-                    org_id_for_recv_task,
-                    "Org not found cannot send message exiting"
-                );
-                return;
-            }
-            send_message_to_client(org.unwrap(), message_to_send).await
-        }
-    });
-
-    let state_for_message_task = state.clone();
-    let org_id_for_message_task = org_id.clone();
     let recv_messages_task = tokio::spawn(recv_messages_task(
         socket,
-        org_id_for_message_task,
-        state_for_message_task,
-        message_backlog_for_recv,
+        org_id.clone(),
+        state,
+        pending_messages,
         is_simulation,
     ));
 
@@ -160,21 +110,71 @@ async fn handle_game_socket(socket: WebSocket, org_id: String, state: SharedStat
     }
 }
 
+async fn send_message_task(
+    org_id: String,
+    state: SharedState,
+    pending_messages: Arc<Mutex<Vec<SceneUpdate>>>,
+) {
+    loop {
+        sleep(std::time::Duration::from_millis(MESSAGE_THROTTLE_MS)).await;
+        let messages = &pending_messages
+            .lock()
+            .await
+            .drain(..)
+            .fold(Vec::new(), |mut acc: Vec<SceneUpdate>, incoming_update| {
+                if let Some(_) = acc.iter().find(|x| x.id == incoming_update.id) {
+                    acc.into_iter()
+                        .map(|mut current_update| {
+                            if current_update.id == incoming_update.id {
+                                current_update.position =
+                                    incoming_update.position.or(current_update.position);
+                                current_update.rotation =
+                                    incoming_update.rotation.or(current_update.rotation);
+                                current_update.color =
+                                    incoming_update.color.or(current_update.color);
+                            }
+                            current_update
+                        })
+                        .collect()
+                } else {
+                    acc.push(incoming_update);
+                    acc
+                }
+            })
+            .iter()
+            .map(|x| serde_json::to_string(x).expect("Failed to serialize message"))
+            .collect::<Vec<String>>()
+            .join(",");
+
+        if messages.is_empty() {
+            continue;
+        }
+
+        let message_to_send = Message::Text(format!("[{}]", messages));
+        let state_gaurd = state.read().await;
+        let current_orgs = &mut state_gaurd.orgs.lock().await;
+        let org = current_orgs.get_mut(&org_id);
+        if org.is_none() {
+            info!(org_id, "Org not found cannot send message exiting");
+            return;
+        }
+        send_message_to_client(org.unwrap(), message_to_send).await
+    }
+}
+
 async fn recv_messages_task(
     mut socket: WebSocket,
     org_id: String,
     state: SharedState,
-    message_backlog: Arc<Mutex<Vec<SceneUpdate>>>,
+    pending_messages: Arc<Mutex<Vec<SceneUpdate>>>,
     is_simulation: bool,
 ) -> () {
-    let mut sim = Simualtion {
-        scene: create_test_scene(),
-    };
+    let mut scene = create_test_scene();
     loop {
         let msg = match is_simulation {
             true => {
                 select! {
-                    r = recv_simulation_frame(&mut sim) => r,
+                    r = recv_simulation_frame(&mut scene) => r,
                     r = socket.recv() => r
                 }
             }
@@ -183,7 +183,7 @@ async fn recv_messages_task(
 
         match msg {
             Some(Ok(Message::Text(text))) => match serde_json::from_str::<SceneUpdate>(&text) {
-                Ok(parsed_update) => message_backlog.lock().await.push(parsed_update),
+                Ok(parsed_update) => pending_messages.lock().await.push(parsed_update),
                 Err(err) => {
                     error!(
                         org_id,
@@ -238,20 +238,16 @@ async fn send_message_to_client(org: &mut Org, message: Message) -> () {
     }
 }
 
-struct Simualtion {
-    scene: scene::Scene,
-}
-
 static DID_COLOR: AtomicBool = AtomicBool::new(false);
 
-async fn recv_simulation_frame(simulation: &mut Simualtion) -> Option<Result<Message, Error>> {
+async fn recv_simulation_frame(scene: &mut scene::Scene) -> Option<Result<Message, Error>> {
     sleep(std::time::Duration::from_millis(SIM_THROTTLE_MS)).await;
 
     let item_index_to_update = {
         let mut rng = rand::thread_rng();
-        rng.gen_range(0..simulation.scene.items.len())
+        rng.gen_range(0..scene.items.len())
     };
-    let item_to_update = simulation.scene.items.get_mut(item_index_to_update);
+    let item_to_update = scene.items.get_mut(item_index_to_update);
 
     if item_to_update.is_none() {
         return Some(Err(Error::new("No items in scene")));

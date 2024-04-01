@@ -1,7 +1,6 @@
 mod client_socket;
-mod color;
+mod data;
 mod game_socket;
-mod hex;
 mod org;
 mod scene;
 mod util;
