@@ -1,16 +1,16 @@
-
-
 use axum::{
-    extract::{State},
+    extract::State,
     response::{IntoResponse, Response},
     Json,
 };
 use serde::{Deserialize, Serialize};
 
+use tracing::info;
 
-use tracing::{info};
-
-use crate::{SharedState};
+use crate::{
+    color::{self, Color},
+    SharedState,
+};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Scene {
@@ -25,6 +25,7 @@ pub struct SceneItem {
     pub id: String,
     pub position: (f32, f32, f32),
     pub rotation: (f32, f32, f32),
+    pub color: Color,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -42,31 +43,42 @@ pub fn create_test_scene() -> Scene {
             SceneItem {
                 id: "0".into(),
                 mesh_type: MeshType::Cube,
-                position: (0.0, 0.0, 0.0),
-                rotation: (0.0, 0.0, 0.0),
+                position: (3.0, 0.0, 0.0),
+                rotation: (1.0, 0.0, 1.0),
+                color: color::Color::from_hex("#af00F0").unwrap(),
             },
-            // SceneItem {
-            //     id: "1".into(),
-            //     mesh_type: MeshType::Cube,
-            //     position: (3.0, 1.0, 1.0),
-            //     rotation: (1.0, 1.0, 1.0),
-            // },
-            // SceneItem {
-            //     id: "2".into(),
-            //     mesh_type: MeshType::Cylinder,
-            //     position: (-2.0, -2.0, 1.0),
-            //     rotation: (1.0, 1.0, 1.0),
-            // },
+            SceneItem {
+                id: "1".into(),
+                mesh_type: MeshType::Cube,
+                position: (0.0, 0.0, 0.0),
+                rotation: (-1.0, 0.0, -1.0),
+                color: color::Color::from_hex("#0FFF00").unwrap(),
+            },
+            SceneItem {
+                id: "2".into(),
+                mesh_type: MeshType::Cube,
+                position: (-3.0, 0.0, 0.0),
+                rotation: (1.0, 1.0, 1.0),
+                color: color::Color::from_hex("#00f0f0").unwrap(),
+            },
         ],
     }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(untagged)]
+pub enum SceneUpdateType {
+    Color(Color),
+    Rotation(Vec<f32>),
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all(serialize = "camelCase"))]
 pub struct SceneUpdate {
-    pub object_id: String,
-    pub path: String,
-    pub value: (f32, f32, f32),
+    pub id: String,
+    pub rotation: Option<(f32, f32, f32)>,
+    pub position: Option<(f32, f32, f32)>,
+    pub color: Option<Color>,
 }
 
 pub async fn get_scene(State(state): State<SharedState>) -> Response {

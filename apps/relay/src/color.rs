@@ -1,8 +1,11 @@
-use serde::{Deserialize, Serialize, Serializer};
+use core::fmt;
+use std::{error::Error, string};
+
+use serde::{de::Visitor, Deserialize, Serialize, Serializer};
 
 use crate::hex;
 
-#[derive(Deserialize, Debug, Copy)]
+#[derive(Debug, Copy)]
 pub struct Color {
     pub r: u8,
     pub g: u8,
@@ -22,6 +25,13 @@ impl From<(u8, u8, u8)> for Color {
             g: color.1,
             b: color.2,
         }
+    }
+}
+
+impl TryFrom<&str> for Color {
+    type Error = ();
+    fn try_from(value: &str) -> Result<Color, Self::Error> {
+        Color::from_hex(&value)
     }
 }
 
@@ -82,5 +92,36 @@ impl Serialize for Color {
     {
         let color: String = self.into();
         serializer.serialize_str(&color)
+    }
+}
+
+impl<'de> Deserialize<'de> for Color {
+    fn deserialize<D>(deserializer: D) -> Result<Color, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_str(ColorVisitor)
+    }
+}
+
+struct ColorVisitor;
+impl<'de> Visitor<'de> for ColorVisitor {
+    type Value = Color;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("a color")
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Color, E>
+    where
+        E: serde::de::Error,
+    {
+        match v.try_into() {
+            Ok(parsed_color) => Ok(parsed_color),
+            Err(_) => Err(serde::de::Error::invalid_value(
+                serde::de::Unexpected::Str(v),
+                &self,
+            )),
+        }
     }
 }

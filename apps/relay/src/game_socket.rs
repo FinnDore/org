@@ -8,7 +8,7 @@ use std::{
 
 use crate::{
     org::{self, Org},
-    scene::{self, create_test_scene, SceneUpdate, SceneUpdateType},
+    scene::{self, create_test_scene, SceneUpdate},
     util::ErrorFormatter,
     SharedState,
 };
@@ -27,7 +27,7 @@ use tokio::{select, sync::Mutex, time::sleep};
 use tracing::{error, info};
 
 const MESSAGE_THROTTLE_MS: u64 = 105;
-const SIM_THROTTLE_MS: u64 = 105;
+const SIM_THROTTLE_MS: u64 = 25;
 
 pub async fn game_handler(
     ws: WebSocketUpgrade,
@@ -35,6 +35,7 @@ pub async fn game_handler(
     State(state): State<SharedState>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
+    info!(org_id, "Gameserver establising connection");
     let auth_header = headers
         .get("authorization")
         .and_then(|header| header.to_str().ok());
@@ -55,25 +56,28 @@ pub async fn game_handler(
 
     drop(current_state);
 
-    info!(org_id, "New game server connected");
     ws.on_upgrade(|socket| handle_game_socket(socket, org_id, state))
 }
 
-async fn handle_game_socket(mut socket: WebSocket, org_id: String, state: SharedState) {
+async fn handle_game_socket(socket: WebSocket, org_id: String, state: SharedState) {
     // TODO reject new connections
     let state_gaurd = state.read().await;
-    state_gaurd
-        .orgs
-        .lock()
-        .await
+    let mut orgs = state_gaurd.orgs.lock().await;
+    let org = orgs
         .entry(org_id.clone())
         .or_insert_with(|| org::Org::new(vec![], true, org_id.clone()));
 
+    info!(
+        org_id,
+        client_count = org.clients.len(),
+        "New game server connected"
+    );
     let is_simulation = state_gaurd.simulation;
+    drop(orgs);
     drop(state_gaurd);
 
-    let message_backlog: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec::Vec::new()));
-    let message_backlog_for_send_task = message_backlog.clone();
+    let message_backlog: Arc<Mutex<Vec<SceneUpdate>>> = Arc::new(Mutex::new(vec::Vec::new()));
+    let message_backlog_for_recv = message_backlog.clone();
 
     let state_for_send_updates_task = state.clone();
     let org_id_for_recv_task = org_id.clone();
@@ -84,6 +88,28 @@ async fn handle_game_socket(mut socket: WebSocket, org_id: String, state: Shared
                 .lock()
                 .await
                 .drain(..)
+                .fold(Vec::new(), |mut acc: Vec<SceneUpdate>, incoming_update| {
+                    if let Some(_) = acc.iter().find(|x| x.id == incoming_update.id) {
+                        acc.into_iter()
+                            .map(|mut current_update| {
+                                if current_update.id == incoming_update.id {
+                                    current_update.position =
+                                        incoming_update.position.or(current_update.position);
+                                    current_update.rotation =
+                                        incoming_update.rotation.or(current_update.rotation);
+                                    current_update.color =
+                                        incoming_update.color.or(current_update.color);
+                                }
+                                current_update
+                            })
+                            .collect()
+                    } else {
+                        acc.push(incoming_update);
+                        acc
+                    }
+                })
+                .iter()
+                .map(|x| serde_json::to_string(x).expect("Failed to serialize message"))
                 .collect::<Vec<String>>()
                 .join(",");
 
@@ -106,61 +132,16 @@ async fn handle_game_socket(mut socket: WebSocket, org_id: String, state: Shared
         }
     });
 
+    let state_for_message_task = state.clone();
     let org_id_for_message_task = org_id.clone();
-    let recv_messages_task = tokio::spawn(async move {
-        let mut sim = Simualtion {
-            scene: create_test_scene(),
-        };
-        loop {
-            let msg = match is_simulation {
-                true => {
-                    select! {
-                        r = recv_simulation_frame(&mut sim) => r,
-                        r= socket.recv() => r
-                    }
-                }
-                false => socket.recv().await,
-            };
+    let recv_messages_task = tokio::spawn(recv_messages_task(
+        socket,
+        org_id_for_message_task,
+        state_for_message_task,
+        message_backlog_for_recv,
+        is_simulation,
+    ));
 
-            match msg {
-                Some(Ok(Message::Text(text))) => {
-                    let _ = &mut message_backlog_for_send_task.lock().await.push(text);
-                }
-                Some(Ok(close_msg @ Message::Close(_))) => {
-                    info!(org_id_for_message_task, "Game server disconnected");
-                    let state_gaurd = state.read().await;
-                    let current_orgs = &mut state_gaurd.orgs.lock().await;
-                    let org = current_orgs.get_mut(&org_id_for_message_task);
-                    if org.is_none() {
-                        info!(org_id_for_message_task, "Org not found cannot send message");
-                        return;
-                    }
-
-                    let org = org.unwrap();
-                    if org.clients.is_empty() {
-                        println!("Removing org");
-                        current_orgs.remove(&org_id_for_message_task);
-                    } else {
-                        println!("not org");
-                        org.server_connected = false;
-                        send_message_to_client(org, close_msg).await;
-                    }
-
-                    break;
-                }
-                Some(Err(err)) => {
-                    error!(
-                        org_id = org_id_for_message_task,
-                        error = ErrorFormatter::format_axum_error(err),
-                        "Error receiving message from simulation or gameserver"
-                    );
-                }
-                Some(Ok(_)) => {}
-                None => {}
-            }
-            // TODO We can probbaly coalce updates into a single containing the final state
-        }
-    });
     let remaining_tasks = match select_all(vec![send_updates_task, recv_messages_task]).await {
         (Ok(_), _, remaining) => remaining,
         (Err(err), index, remaining) => {
@@ -176,6 +157,71 @@ async fn handle_game_socket(mut socket: WebSocket, org_id: String, state: Shared
 
     for task in remaining_tasks {
         task.abort();
+    }
+}
+
+async fn recv_messages_task(
+    mut socket: WebSocket,
+    org_id: String,
+    state: SharedState,
+    message_backlog: Arc<Mutex<Vec<SceneUpdate>>>,
+    is_simulation: bool,
+) -> () {
+    let mut sim = Simualtion {
+        scene: create_test_scene(),
+    };
+    loop {
+        let msg = match is_simulation {
+            true => {
+                select! {
+                    r = recv_simulation_frame(&mut sim) => r,
+                    r = socket.recv() => r
+                }
+            }
+            false => socket.recv().await,
+        };
+
+        match msg {
+            Some(Ok(Message::Text(text))) => match serde_json::from_str::<SceneUpdate>(&text) {
+                Ok(parsed_update) => message_backlog.lock().await.push(parsed_update),
+                Err(err) => {
+                    error!(
+                        org_id,
+                        error = ErrorFormatter::format_serde_error(err),
+                        "Error parsing message from gameserver"
+                    );
+                }
+            },
+
+            Some(Ok(close_msg @ Message::Close(_))) => {
+                info!(org_id, "Game server disconnected");
+                let state_gaurd = state.read().await;
+                let current_orgs = &mut state_gaurd.orgs.lock().await;
+                let org = current_orgs.get_mut(&org_id);
+                if org.is_none() {
+                    return;
+                }
+
+                let org = org.unwrap();
+                if org.clients.is_empty() {
+                    current_orgs.remove(&org_id);
+                } else {
+                    org.server_connected = false;
+                    send_message_to_client(org, close_msg).await;
+                }
+
+                return;
+            }
+            Some(Err(err)) => {
+                error!(
+                    org_id = org_id,
+                    error = ErrorFormatter::format_axum_error(err),
+                    "Error receiving message from simulation or gameserver"
+                );
+            }
+            Some(Ok(_)) => {}
+            None => {}
+        }
     }
 }
 
@@ -220,9 +266,10 @@ async fn recv_simulation_frame(simulation: &mut Simualtion) -> Option<Result<Mes
             item.color.increment();
             Some(Ok(Message::Text(
                 serde_json::to_string(&SceneUpdate {
-                    object_id: item_index_to_update.to_string(),
-                    path: "color".into(),
-                    value: SceneUpdateType::Color(item.color),
+                    id: item_index_to_update.to_string(),
+                    color: Some(item.color),
+                    rotation: None,
+                    position: None,
                 })
                 .unwrap(),
             )))
@@ -232,17 +279,13 @@ async fn recv_simulation_frame(simulation: &mut Simualtion) -> Option<Result<Mes
             item.rotation.2 += 0.2;
             Some(Ok(Message::Text(
                 serde_json::to_string(&SceneUpdate {
-                    object_id: item_index_to_update.to_string(),
-                    path: "rotation".into(),
-                    value: SceneUpdateType::Rotation(vec![
-                        item.rotation.0,
-                        item.rotation.1,
-                        item.rotation.2,
-                    ]),
+                    id: item_index_to_update.to_string(),
+                    rotation: Some((item.rotation.0, item.rotation.1, item.rotation.2)),
+                    color: None,
+                    position: None,
                 })
                 .unwrap(),
             )))
         }
-        _ => None,
     }
 }

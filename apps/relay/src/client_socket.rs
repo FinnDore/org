@@ -84,16 +84,17 @@ async fn handle_client_socket(ws: WebSocket, org_id: String, state: SharedState)
         while let Some(msg) = ws_rx.next().await {
             match msg {
                 Ok(Message::Close(_)) => {
-                    info!(
-                        org_id = org_id_for_disconnect_task,
-                        client_id, "Client disconnected",
-                    );
-                    remove_client(
+                    let client_count = remove_client(
                         &org_id_for_disconnect_task,
                         client_id,
                         state_for_disconnect_task,
                     )
-                    .await;
+                    .await
+                    .unwrap_or(0);
+                    info!(
+                        org_id = org_id_for_disconnect_task,
+                        client_id, client_count, "Client disconnected",
+                    );
                     return;
                 }
                 Ok(Message::Text(incoming_message)) => {
@@ -140,13 +141,17 @@ async fn handle_client_socket(ws: WebSocket, org_id: String, state: SharedState)
     }
 }
 
-async fn remove_client(org_id: &String, client_id: usize, state: SharedState) {
+async fn remove_client(org_id: &String, client_id: usize, state: SharedState) -> Option<usize> {
     let ctx_gaurd = state.write().await;
     let mut current_orgs = ctx_gaurd.orgs.lock().await;
     if let Some(org) = current_orgs.get_mut(org_id) {
         org.clients.retain(|client| client.client_id != client_id);
-        if org.clients.len() == 0 && !org.server_connected {
+        let client_count = org.clients.len();
+        if client_count == 0 && !org.server_connected {
             current_orgs.remove(org_id);
+            return Some(client_count - 1);
         }
+        return Some(client_count);
     }
+    None
 }

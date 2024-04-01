@@ -7,6 +7,10 @@ impl ErrorFormatter {
         format!("{:?}", err)
     }
 
+    pub fn format_serde_error(err: serde_json::Error) -> String {
+        format!("{:?}", err)
+    }
+
     pub fn format_join_error(err: tokio::task::JoinError) -> String {
         format!("{:?}", err)
     }
