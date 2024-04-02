@@ -37,8 +37,7 @@ async fn handle_client_socket(ws: WebSocket, org_id: String, state: SharedState)
 
     info!(org_id, client_id, "New client connected");
 
-    let ctx_gaurd = state.as_ref().write().await;
-    let mut current_orgs = ctx_gaurd.orgs.lock().await;
+    let mut current_orgs = state.orgs.lock().await;
     current_orgs
         .entry(org_id.clone())
         .or_insert_with(|| Org::new(vec![], true, org_id.clone()))
@@ -46,7 +45,6 @@ async fn handle_client_socket(ws: WebSocket, org_id: String, state: SharedState)
         .push(Client { tx, client_id });
 
     drop(current_orgs);
-    drop(ctx_gaurd);
 
     let state_for_message_task = state.clone();
     let org_id_for_message_task = org_id.clone();
@@ -134,16 +132,14 @@ async fn handle_client_socket(ws: WebSocket, org_id: String, state: SharedState)
         task.abort();
     }
 
-    let ctx_gaurd = state.write().await;
-    let mut current_orgs = ctx_gaurd.orgs.lock().await;
+    let mut current_orgs = state.orgs.lock().await;
     if let Some(org) = current_orgs.get_mut(&org_id) {
         org.clients.retain(|client| client.client_id != client_id);
     }
 }
 
 async fn remove_client(org_id: &String, client_id: usize, state: SharedState) -> Option<usize> {
-    let ctx_gaurd = state.write().await;
-    let mut current_orgs = ctx_gaurd.orgs.lock().await;
+    let mut current_orgs = state.orgs.lock().await;
     if let Some(org) = current_orgs.get_mut(org_id) {
         org.clients.retain(|client| client.client_id != client_id);
         let client_count = org.clients.len();

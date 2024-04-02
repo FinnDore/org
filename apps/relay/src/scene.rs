@@ -83,6 +83,6 @@ pub struct SceneUpdate {
 
 pub async fn get_scene(State(state): State<SharedState>) -> Response {
     info!("Getting scene");
-    let scene = state.read().await.scene.read().await.clone();
+    let scene = state.scene.read().await.clone();
     Json(scene).into_response()
 }

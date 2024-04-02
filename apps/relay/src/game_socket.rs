@@ -40,8 +40,7 @@ pub async fn game_handler(
         .get("authorization")
         .and_then(|header| header.to_str().ok());
 
-    let current_state = state.read().await;
-    if auth_header.is_none() || current_state.auth_token != auth_header.unwrap() {
+    if auth_header.is_none() || state.auth_token != auth_header.unwrap() {
         info!(
             org_id,
             "Failed to connect auth header is {}",
@@ -54,15 +53,12 @@ pub async fn game_handler(
         return status::StatusCode::UNAUTHORIZED.into_response();
     }
 
-    drop(current_state);
-
     ws.on_upgrade(|socket| handle_game_socket(socket, org_id, state))
 }
 
 async fn handle_game_socket(socket: WebSocket, org_id: String, state: SharedState) {
     // TODO reject new connections
-    let state_gaurd = state.read().await;
-    let mut orgs = state_gaurd.orgs.lock().await;
+    let mut orgs = state.orgs.lock().await;
     let org = orgs
         .entry(org_id.clone())
         .or_insert_with(|| org::Org::new(vec![], true, org_id.clone()));
@@ -72,9 +68,8 @@ async fn handle_game_socket(socket: WebSocket, org_id: String, state: SharedStat
         client_count = org.clients.len(),
         "New game server connected"
     );
-    let is_simulation = state_gaurd.simulation;
+    let is_simulation = state.simulation;
     drop(orgs);
-    drop(state_gaurd);
 
     let pending_messages: Arc<Mutex<Vec<SceneUpdate>>> = Arc::new(Mutex::new(vec::Vec::new()));
 
@@ -122,7 +117,7 @@ async fn send_message_task(
             .await
             .drain(..)
             .fold(Vec::new(), |mut acc: Vec<SceneUpdate>, incoming_update| {
-                if let Some(_) = acc.iter().find(|x| x.id == incoming_update.id) {
+                if acc.iter().any(|x| x.id == incoming_update.id) {
                     acc.into_iter()
                         .map(|mut current_update| {
                             if current_update.id == incoming_update.id {
@@ -151,8 +146,7 @@ async fn send_message_task(
         }
 
         let message_to_send = Message::Text(format!("[{}]", messages));
-        let state_gaurd = state.read().await;
-        let current_orgs = &mut state_gaurd.orgs.lock().await;
+        let current_orgs = &mut state.orgs.lock().await;
         let org = current_orgs.get_mut(&org_id);
         if org.is_none() {
             info!(org_id, "Org not found cannot send message exiting");
@@ -168,7 +162,7 @@ async fn recv_messages_task(
     state: SharedState,
     pending_messages: Arc<Mutex<Vec<SceneUpdate>>>,
     is_simulation: bool,
-) -> () {
+) {
     let mut scene = create_test_scene();
     loop {
         let msg = match is_simulation {
@@ -195,8 +189,7 @@ async fn recv_messages_task(
 
             Some(Ok(close_msg @ Message::Close(_))) => {
                 info!(org_id, "Game server disconnected");
-                let state_gaurd = state.read().await;
-                let current_orgs = &mut state_gaurd.orgs.lock().await;
+                let current_orgs = &mut state.orgs.lock().await;
                 let org = current_orgs.get_mut(&org_id);
                 if org.is_none() {
                     return;
@@ -225,7 +218,7 @@ async fn recv_messages_task(
     }
 }
 
-async fn send_message_to_client(org: &mut Org, message: Message) -> () {
+async fn send_message_to_client(org: &mut Org, message: Message) {
     for client in org.clients.iter() {
         if let Err(err) = client.tx.send(message.clone()) {
             error!(

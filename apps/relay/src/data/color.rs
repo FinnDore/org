@@ -30,7 +30,7 @@ impl From<(u8, u8, u8)> for Color {
 impl TryFrom<&str> for Color {
     type Error = ();
     fn try_from(value: &str) -> Result<Color, Self::Error> {
-        Color::from_hex(&value)
+        Color::from_hex(value)
     }
 }
 
@@ -62,25 +62,21 @@ impl Color {
     pub fn increment(&mut self) {
         if self.r < 255 {
             self.r += 1;
+        } else if self.g < 255 {
+            self.g += 1;
+        } else if self.b < 255 {
+            self.b += 1;
         } else {
-            if self.g < 255 {
-                self.g += 1;
-            } else {
-                if self.b < 255 {
-                    self.b += 1;
-                } else {
-                    self.b = 0;
-                    self.r = 128;
-                    self.g = 0;
-                }
-            }
+            self.b = 0;
+            self.r = 128;
+            self.g = 0;
         }
     }
 }
 
-impl Into<String> for &Color {
-    fn into(self) -> String {
-        format!("#{:02x}{:02x}{:02x}", self.r, self.g, self.b)
+impl From<&Color> for String {
+    fn from(val: &Color) -> Self {
+        format!("#{:02x}{:02x}{:02x}", val.r, val.g, val.b)
     }
 }
 

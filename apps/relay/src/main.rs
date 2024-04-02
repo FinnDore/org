@@ -33,7 +33,7 @@ impl TheState {
     }
 }
 
-pub type SharedState = Arc<RwLock<TheState>>;
+pub type SharedState = Arc<TheState>;
 
 #[tokio::main]
 async fn main() {
@@ -50,7 +50,7 @@ async fn main() {
 
     let auth_token = std::env::var("AUTH_TOKEN").expect("AUTH_TOKEN env var set");
     let simulation = std::env::var("SIMULATE").unwrap_or_default() == "true";
-    let state = Arc::new(RwLock::new(TheState::new(auth_token, simulation)));
+    let state = Arc::new(TheState::new(auth_token, simulation));
 
     let app = Router::new()
         .route("/sub/:org", get(client_handler))
