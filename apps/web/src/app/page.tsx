@@ -3,9 +3,12 @@ import { type SceneItem } from "@/server/api/routers/scene";
 import { api } from "@/trpc/react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useRef, useState } from "react";
+import { OrbitControls } from '@react-three/drei'
+
 import { damp } from "three/src/math/MathUtils.js";
 
 export default function Home() {
+  
     return (
         <main className="relative flex min-h-screen bg-black">
             <Canvas
@@ -13,6 +16,7 @@ export default function Home() {
                     height: "100vh",
                 }}
             >
+
                 <Scene />
             </Canvas>
         </main>
@@ -62,7 +66,11 @@ function useWebsocket(opts: {
 }
 
 function Scene() {
-    const { scene: theScene } = useThree();
+    const { scene: theScene, set } = useThree();
+  const cameraRef = useRef()
+  // This makes sure that size-related calculations are proper
+  // Every call to useThree will return this camera instead of the default camera 
+  useEffect(() => cameraRef.current &&void set({camera:cameraRef.current}), [])
     const scene = api.scene.getSceneByOrg.useQuery(
         { orgName: "test" },
         {
@@ -112,24 +120,48 @@ function Scene() {
                 }
                 const targetPos = target.position;
                 current.position.set(
-                    damp(current.position.x, targetPos[0] ?? 0, 0.45, 0.01),
-                    damp(current.position.y, targetPos[1] ?? 0, 0.45, 0.01),
-                    damp(current.position.z, targetPos[2] ?? 0, 0.45, 0.01),
+                  targetPos[0] ?? 0,
+                     targetPos[1]??0,
+                   targetPos[2] ??0
                 );
+                // current.position.set(
+                //     damp(current.position.x, targetPos[0] ?? 0, 0.45, 0.01),
+                //     damp(current.position.y, targetPos[1] ?? 0, 0.45, 0.01),
+                //     damp(current.position.z, targetPos[2] ?? 0, 0.45, 0.01),
+                // );
                 const targetRot = target.rotation;
                 current.rotation.set(
                     damp(current.rotation.x, targetRot[0] ?? 0, 0.45, 0.01),
                     damp(current.rotation.y, targetRot[1] ?? 0, 0.45, 0.01),
                     damp(current.rotation.z, targetRot[2] ?? 0, 0.45, 0.01),
                 );
+ current.rotation.set(
+                     targetRot[0] ,
+                     targetRot[1] ,
+                     targetRot[2] ,
+                );
                 current.material.color.set(target.color);
             }
         }
     });
 
+        const config = { fov: 95, position: [0, 0, 10] } as any
     return (
         <>
-            <ambientLight intensity={0.5} />
+        <OrbitControls camera={cameraRef.current}/>
+
+
+            <perspectiveCamera orbi ref={cameraRef}position={[0, 0,2000]} rotation={
+            [
+                
+                90,55,180]
+
+
+            }
+            
+            
+            far={100000}/>
+            <ambientLight intensity={1} />
             <directionalLight position={[0, 0, 5]} />
             {ref.current?.map((item) => {
                 switch (item.meshType) {
@@ -140,8 +172,9 @@ function Scene() {
                                 name={item.id}
                                 rotation={item.rotation}
                                 position={item.position}
+                                
                             >
-                                <boxGeometry args={[1]} />
+                                <boxGeometry args={[100, 100, 100]} />
                                 <meshStandardMaterial color={item.color} />
                             </mesh>
                         );

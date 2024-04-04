@@ -26,7 +26,7 @@ use rand::Rng;
 use tokio::{select, sync::Mutex, time::sleep};
 use tracing::{error, info};
 
-const MESSAGE_THROTTLE_MS: u64 = 105;
+const MESSAGE_THROTTLE_MS: u64 = 10;
 const SIM_THROTTLE_MS: u64 = 25;
 
 pub async fn game_handler(
@@ -36,26 +36,7 @@ pub async fn game_handler(
     headers: HeaderMap,
 ) -> impl IntoResponse {
     info!(org_id, "Gameserver establising connection");
-    let auth_header = headers
-        .get("authorization")
-        .and_then(|header| header.to_str().ok());
-
-    let current_state = state.read().await;
-    if auth_header.is_none() || current_state.auth_token != auth_header.unwrap() {
-        info!(
-            org_id,
-            "Failed to connect auth header is {}",
-            if auth_header.is_none() {
-                "missing"
-            } else {
-                "invalid"
-            }
-        );
-        return status::StatusCode::UNAUTHORIZED.into_response();
-    }
-
-    drop(current_state);
-
+   
     ws.on_upgrade(|socket| handle_game_socket(socket, org_id, state))
 }
 
@@ -73,6 +54,7 @@ async fn handle_game_socket(socket: WebSocket, org_id: String, state: SharedStat
         "New game server connected"
     );
     let is_simulation = state_gaurd.simulation;
+
     drop(orgs);
     drop(state_gaurd);
 
@@ -182,7 +164,9 @@ async fn recv_messages_task(
         };
 
         match msg {
-            Some(Ok(Message::Text(text))) => match serde_json::from_str::<SceneUpdate>(&text) {
+            Some(Ok(Message::Text(text))) => {
+                info!(text);
+                match serde_json::from_str::<SceneUpdate>(&text) {
                 Ok(parsed_update) => pending_messages.lock().await.push(parsed_update),
                 Err(err) => {
                     error!(
@@ -190,7 +174,7 @@ async fn recv_messages_task(
                         error = ErrorFormatter::format_serde_error(err),
                         "Error parsing message from gameserver"
                     );
-                }
+                }}
             },
 
             Some(Ok(close_msg @ Message::Close(_))) => {

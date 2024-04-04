@@ -1,6 +1,6 @@
 {
     "name": "relay",
     "scripts": {
-        "dev": "SIMULATE=true ENV=development AUTH_TOKEN=1 cargo watch -x run"
+        "dev": "SIMULATE=false ENV=development AUTH_TOKEN=1 cargo watch -x run"
     }
 }

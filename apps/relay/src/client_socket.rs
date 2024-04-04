@@ -149,9 +149,9 @@ async fn remove_client(org_id: &String, client_id: usize, state: SharedState) ->
         let client_count = org.clients.len();
         if client_count == 0 && !org.server_connected {
             current_orgs.remove(org_id);
-            return Some(client_count - 1);
+            return Some(client_count);
         }
-        return Some(client_count);
+        return Some(client_count -1);
     }
     None
 }
