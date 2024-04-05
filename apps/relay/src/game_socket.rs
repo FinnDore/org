@@ -175,6 +175,7 @@ async fn recv_messages_task(
             false => socket.recv().await,
         };
 
+        info!(org_id, "Received message from gameserver");
         match msg {
             Some(Ok(Message::Text(text))) => match serde_json::from_str::<SceneUpdate>(&text) {
                 Ok(parsed_update) => pending_messages.lock().await.push(parsed_update),
@@ -187,33 +188,23 @@ async fn recv_messages_task(
                 }
             },
 
-            Some(Ok(close_msg @ Message::Close(_))) => {
+            Some(Ok(Message::Close(_))) => {
                 info!(org_id, "Game server disconnected");
-                let current_orgs = &mut state.orgs.lock().await;
-                let org = current_orgs.get_mut(&org_id);
-                if org.is_none() {
-                    return;
-                }
-
-                let org = org.unwrap();
-                if org.clients.is_empty() {
-                    current_orgs.remove(&org_id);
-                } else {
-                    org.server_connected = false;
-                    send_message_to_client(org, close_msg).await;
-                }
-
                 return;
             }
             Some(Err(err)) => {
                 error!(
                     org_id = org_id,
                     error = ErrorFormatter::format_axum_error(err),
-                    "Error receiving message from simulation or gameserver"
+                    "Error receiving message from simulation or gameserver, disconnecting"
                 );
+                return;
             }
             Some(Ok(_)) => {}
-            None => {}
+            None => {
+                info!(org_id, "Recived a None game server disconnected");
+                return;
+            }
         }
     }
 }
