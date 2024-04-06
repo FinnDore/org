@@ -129,7 +129,7 @@ async fn handle_client_socket(ws: WebSocket, org_id: String, state: SharedState)
     }
 }
 
-#[instrument]
+#[instrument(skip(state))]
 async fn remove_client(org_id: &String, client_id: usize, state: SharedState) -> Option<usize> {
     let mut current_orgs = state.orgs.lock().await;
     if let Some(org) = current_orgs.get_mut(org_id) {
