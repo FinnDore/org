@@ -1,6 +1,7 @@
 use axum::extract::ws::Message;
 use tokio::sync::mpsc::UnboundedSender;
 
+#[derive(Debug)]
 pub struct Org {
     pub id: String,
     pub clients: Vec<Client>,
@@ -17,6 +18,7 @@ impl Org {
     }
 }
 
+#[derive(Debug)]
 pub struct Client {
     pub client_id: usize,
     pub tx: UnboundedSender<Message>,

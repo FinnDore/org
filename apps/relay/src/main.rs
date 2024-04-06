@@ -15,6 +15,7 @@ use axum::{routing::get, Router};
 
 use tokio::sync::{Mutex, RwLock};
 
+#[derive(Debug)]
 pub struct TheState {
     pub auth_token: String,
     pub simulation: bool,

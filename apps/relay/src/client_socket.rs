@@ -8,7 +8,7 @@ use axum::{
     response::Response,
 };
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
-use tracing::{error, info};
+use tracing::{error, info, instrument};
 
 use crate::{
     org::{Client, Org},
@@ -19,6 +19,7 @@ use futures_util::{future::select_all, sink::SinkExt, stream::StreamExt};
 
 static CLIENT_COUNT: AtomicUsize = AtomicUsize::new(0);
 
+#[instrument]
 pub async fn client_handler(
     ws: WebSocketUpgrade,
     Path(org_id): Path<String>,
@@ -29,6 +30,7 @@ pub async fn client_handler(
     ws.on_upgrade(|socket| handle_client_socket(socket, org_id, state))
 }
 
+#[instrument]
 async fn handle_client_socket(ws: WebSocket, org_id: String, state: SharedState) {
     let (mut ws_tx, mut ws_rx) = ws.split();
     let (tx, mut incoming_messages_rx): (UnboundedSender<Message>, UnboundedReceiver<Message>) =
@@ -138,6 +140,7 @@ async fn handle_client_socket(ws: WebSocket, org_id: String, state: SharedState)
     }
 }
 
+#[instrument]
 async fn remove_client(org_id: &String, client_id: usize, state: SharedState) -> Option<usize> {
     let mut current_orgs = state.orgs.lock().await;
     if let Some(org) = current_orgs.get_mut(org_id) {

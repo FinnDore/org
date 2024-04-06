@@ -24,11 +24,12 @@ use axum::{
 use futures_util::future::select_all;
 use rand::Rng;
 use tokio::{select, sync::Mutex, time::sleep};
-use tracing::{error, info};
+use tracing::{error, info, instrument};
 
 const MESSAGE_THROTTLE_MS: u64 = 105;
 const SIM_THROTTLE_MS: u64 = 25;
 
+#[instrument]
 pub async fn game_handler(
     ws: WebSocketUpgrade,
     Path(org_id): Path<String>,
@@ -56,6 +57,7 @@ pub async fn game_handler(
     ws.on_upgrade(|socket| handle_game_socket(socket, org_id, state))
 }
 
+#[instrument]
 async fn handle_game_socket(socket: WebSocket, org_id: String, state: SharedState) {
     // TODO reject new connections
     let mut orgs = state.orgs.lock().await;
@@ -82,7 +84,6 @@ async fn handle_game_socket(socket: WebSocket, org_id: String, state: SharedStat
     let recv_messages_task = tokio::spawn(recv_messages_task(
         socket,
         org_id.clone(),
-        state,
         pending_messages,
         is_simulation,
     ));
@@ -105,6 +106,7 @@ async fn handle_game_socket(socket: WebSocket, org_id: String, state: SharedStat
     }
 }
 
+#[instrument]
 async fn send_message_task(
     org_id: String,
     state: SharedState,
@@ -156,10 +158,10 @@ async fn send_message_task(
     }
 }
 
+#[instrument]
 async fn recv_messages_task(
     mut socket: WebSocket,
     org_id: String,
-    state: SharedState,
     pending_messages: Arc<Mutex<Vec<SceneUpdate>>>,
     is_simulation: bool,
 ) {
@@ -209,6 +211,7 @@ async fn recv_messages_task(
     }
 }
 
+#[instrument]
 async fn send_message_to_client(org: &mut Org, message: Message) {
     for client in org.clients.iter() {
         if let Err(err) = client.tx.send(message.clone()) {
@@ -224,6 +227,7 @@ async fn send_message_to_client(org: &mut Org, message: Message) {
 
 static DID_COLOR: AtomicBool = AtomicBool::new(false);
 
+#[instrument]
 async fn recv_simulation_frame(scene: &mut scene::Scene) -> Option<Result<Message, Error>> {
     sleep(std::time::Duration::from_millis(SIM_THROTTLE_MS)).await;
 
