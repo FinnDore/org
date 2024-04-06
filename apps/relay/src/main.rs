@@ -7,11 +7,20 @@ mod util;
 
 use org::Org;
 use scene::Scene;
+use std::str::FromStr;
 use std::{collections::HashMap, sync::Arc};
 use tracing::{info, level_filters::LevelFilter};
+use tracing::{instrument, span};
 
 use crate::{client_socket::client_handler, game_socket::game_handler, scene::get_scene};
 use axum::{routing::get, Router};
+use tracing_subscriber::filter::EnvFilter;
+use tracing_subscriber::{
+    fmt::{self, layer, writer::WithMaxLevel},
+    layer::{self, Filter},
+    prelude::*,
+    registry, Registry,
+};
 
 use tokio::sync::{Mutex, RwLock};
 
@@ -37,16 +46,45 @@ impl TheState {
 pub type SharedState = Arc<TheState>;
 
 #[tokio::main]
+#[instrument]
 async fn main() {
     let env = std::env::var("ENV").unwrap_or("production".into());
     if env == "development" {
         tracing_subscriber::fmt().without_time().init();
     } else {
-        let log_level = std::env::var("LOG_LEVEL")
-            .unwrap_or("info".to_string())
-            .parse::<LevelFilter>()
-            .expect("Invalid log level");
-        tracing_subscriber::fmt().with_max_level(log_level).init();
+        let env_filter = EnvFilter::builder()
+            .with_default_directive(LevelFilter::DEBUG.into())
+            .from_env()
+            .expect("Failed to create env filter invalid RUST_LOG env var");
+
+        let registry = Registry::default().with(env_filter).with(fmt::layer());
+
+        if let Ok(_) = std::env::var("AXIOM_TOKEN") {
+            let axiom_layer = tracing_axiom::builder()
+                .with_service_name("org")
+                .with_tags(&[(
+                    &"deployment_id",
+                    &std::env::var("RAILWAY_DEPLOYMENT_ID")
+                        .map(|s| {
+                            s + "-"
+                                + std::env::var("RAILWAY_DEPLOYMENT_ID")
+                                    .unwrap_or("unknown_replica".into())
+                                    .as_str()
+                        })
+                        .unwrap_or("unknown_deployment".into()),
+                )])
+                .with_tags(&[(&"service.name", "org".into())])
+                .layer()
+                .expect("Axiom layer failed to initialize");
+
+            registry
+                .with(axiom_layer)
+                .try_init()
+                .expect("Failed to initialize tracing with axiom");
+            info!("Initialized tracing with axiom");
+        } else {
+            registry.try_init().expect("Failed to initialize tracing");
+        }
     };
 
     let auth_token = std::env::var("AUTH_TOKEN").expect("AUTH_TOKEN env var set");
@@ -58,6 +96,8 @@ async fn main() {
         .route("/game/:org", get(game_handler))
         .route("/scene/:org", get(get_scene))
         .with_state(state);
+    // let root = span!(tracing::Level::TRACE, "app_start", work_units = 2);
+    // let _enter = root.enter();
 
     let port = std::env::var("PORT").unwrap_or("3002".to_string());
     let host = format!("0.0.0.0:{}", port);
