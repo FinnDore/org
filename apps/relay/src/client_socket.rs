@@ -8,7 +8,7 @@ use axum::{
     response::Response,
 };
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
-use tracing::{error, info};
+use tracing::{error, info, instrument};
 
 use crate::{
     org::{Client, Org},
@@ -19,6 +19,7 @@ use futures_util::{future::select_all, sink::SinkExt, stream::StreamExt};
 
 static CLIENT_COUNT: AtomicUsize = AtomicUsize::new(0);
 
+#[instrument(skip(ws, state))]
 pub async fn client_handler(
     ws: WebSocketUpgrade,
     Path(org_id): Path<String>,
@@ -29,13 +30,14 @@ pub async fn client_handler(
     ws.on_upgrade(|socket| handle_client_socket(socket, org_id, state))
 }
 
+#[instrument(skip(ws, state))]
 async fn handle_client_socket(ws: WebSocket, org_id: String, state: SharedState) {
     let (mut ws_tx, mut ws_rx) = ws.split();
     let (tx, mut incoming_messages_rx): (UnboundedSender<Message>, UnboundedReceiver<Message>) =
         mpsc::unbounded_channel();
     let client_id = CLIENT_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
-    info!(org_id, client_id, "New client connected");
+    info!(client_id, "New client connected");
 
     let mut current_orgs = state.orgs.lock().await;
     current_orgs
@@ -54,7 +56,6 @@ async fn handle_client_socket(ws: WebSocket, org_id: String, state: SharedState)
                 msg @ Message::Text(_) => {
                     if let Err(err) = ws_tx.send(msg).await {
                         error!(
-                            org_id = org_id_for_message_task,
                             client_id,
                             error = ErrorFormatter::format_axum_error(err),
                             "Error sending message"
@@ -62,10 +63,7 @@ async fn handle_client_socket(ws: WebSocket, org_id: String, state: SharedState)
                     }
                 }
                 Message::Close(_) => {
-                    info!(
-                        org_id = org_id_for_message_task,
-                        client_id, "Client disconnected",
-                    );
+                    info!(client_id, "Client disconnected",);
 
                     remove_client(&org_id_for_message_task, client_id, state_for_message_task)
                         .await;
@@ -89,22 +87,15 @@ async fn handle_client_socket(ws: WebSocket, org_id: String, state: SharedState)
                     )
                     .await
                     .unwrap_or(0);
-                    info!(
-                        org_id = org_id_for_disconnect_task,
-                        client_id, client_count, "Client disconnected",
-                    );
+                    info!(client_id, client_count, "Client disconnected",);
                     return;
                 }
                 Ok(Message::Text(incoming_message)) => {
-                    info!(
-                        org_id = org_id_for_disconnect_task,
-                        client_id, incoming_message, "Message from client",
-                    );
+                    info!(client_id, incoming_message, "Message from client",);
                 }
                 Ok(_) => continue,
                 Err(err) => {
                     error!(
-                        org_id = org_id_for_disconnect_task,
                         client_id,
                         error = ErrorFormatter::format_axum_error(err),
                         "Error receiving message"
@@ -138,6 +129,7 @@ async fn handle_client_socket(ws: WebSocket, org_id: String, state: SharedState)
     }
 }
 
+#[instrument(skip(state))]
 async fn remove_client(org_id: &String, client_id: usize, state: SharedState) -> Option<usize> {
     let mut current_orgs = state.orgs.lock().await;
     if let Some(org) = current_orgs.get_mut(org_id) {

@@ -5,7 +5,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use tracing::info;
+use tracing::{info, instrument};
 
 use crate::{
     data::color::{self, Color},
@@ -81,6 +81,7 @@ pub struct SceneUpdate {
     pub color: Option<Color>,
 }
 
+#[instrument(skip(state))]
 pub async fn get_scene(State(state): State<SharedState>) -> Response {
     info!("Getting scene");
     let scene = state.scene.read().await.clone();

@@ -24,11 +24,12 @@ use axum::{
 use futures_util::future::select_all;
 use rand::Rng;
 use tokio::{select, sync::Mutex, time::sleep};
-use tracing::{error, info};
+use tracing::{error, info, instrument, trace};
 
 const MESSAGE_THROTTLE_MS: u64 = 105;
 const SIM_THROTTLE_MS: u64 = 25;
 
+#[instrument(skip(ws, state, headers))]
 pub async fn game_handler(
     ws: WebSocketUpgrade,
     Path(org_id): Path<String>,
@@ -42,7 +43,6 @@ pub async fn game_handler(
 
     if auth_header.is_none() || state.auth_token != auth_header.unwrap() {
         info!(
-            org_id,
             "Failed to connect auth header is {}",
             if auth_header.is_none() {
                 "missing"
@@ -56,6 +56,7 @@ pub async fn game_handler(
     ws.on_upgrade(|socket| handle_game_socket(socket, org_id, state))
 }
 
+#[instrument(skip(socket, state))]
 async fn handle_game_socket(socket: WebSocket, org_id: String, state: SharedState) {
     // TODO reject new connections
     let mut orgs = state.orgs.lock().await;
@@ -64,7 +65,6 @@ async fn handle_game_socket(socket: WebSocket, org_id: String, state: SharedStat
         .or_insert_with(|| org::Org::new(vec![], true, org_id.clone()));
 
     info!(
-        org_id,
         client_count = org.clients.len(),
         "New game server connected"
     );
@@ -82,7 +82,6 @@ async fn handle_game_socket(socket: WebSocket, org_id: String, state: SharedStat
     let recv_messages_task = tokio::spawn(recv_messages_task(
         socket,
         org_id.clone(),
-        state,
         pending_messages,
         is_simulation,
     ));
@@ -91,7 +90,6 @@ async fn handle_game_socket(socket: WebSocket, org_id: String, state: SharedStat
         (Ok(_), _, remaining) => remaining,
         (Err(err), index, remaining) => {
             error!(
-                org_id,
                 index,
                 error = ErrorFormatter::format_join_error(err),
                 "Error in gamerserver handling task"
@@ -105,6 +103,7 @@ async fn handle_game_socket(socket: WebSocket, org_id: String, state: SharedStat
     }
 }
 
+#[instrument(skip(state, pending_messages))]
 async fn send_message_task(
     org_id: String,
     state: SharedState,
@@ -149,17 +148,17 @@ async fn send_message_task(
         let current_orgs = &mut state.orgs.lock().await;
         let org = current_orgs.get_mut(&org_id);
         if org.is_none() {
-            info!(org_id, "Org not found cannot send message exiting");
+            info!("Org not found cannot send message exiting");
             return;
         }
         send_message_to_client(org.unwrap(), message_to_send).await
     }
 }
 
+#[instrument(skip(socket, pending_messages))]
 async fn recv_messages_task(
     mut socket: WebSocket,
     org_id: String,
-    state: SharedState,
     pending_messages: Arc<Mutex<Vec<SceneUpdate>>>,
     is_simulation: bool,
 ) {
@@ -175,13 +174,12 @@ async fn recv_messages_task(
             false => socket.recv().await,
         };
 
-        info!(org_id, "Received message from gameserver");
+        trace!(org_id, "Received message from gameserver");
         match msg {
             Some(Ok(Message::Text(text))) => match serde_json::from_str::<SceneUpdate>(&text) {
                 Ok(parsed_update) => pending_messages.lock().await.push(parsed_update),
                 Err(err) => {
                     error!(
-                        org_id,
                         error = ErrorFormatter::format_serde_error(err),
                         "Error parsing message from gameserver"
                     );
@@ -189,12 +187,11 @@ async fn recv_messages_task(
             },
 
             Some(Ok(Message::Close(_))) => {
-                info!(org_id, "Game server disconnected");
+                info!("Game server disconnected");
                 return;
             }
             Some(Err(err)) => {
                 error!(
-                    org_id = org_id,
                     error = ErrorFormatter::format_axum_error(err),
                     "Error receiving message from simulation or gameserver, disconnecting"
                 );
@@ -209,11 +206,11 @@ async fn recv_messages_task(
     }
 }
 
+#[instrument(skip(org, message))]
 async fn send_message_to_client(org: &mut Org, message: Message) {
     for client in org.clients.iter() {
         if let Err(err) = client.tx.send(message.clone()) {
             error!(
-                org_id = org.id,
                 client_id = client.client_id,
                 error = ErrorFormatter::format_ws_send_error(err),
                 "Error producing message to client"
@@ -224,6 +221,7 @@ async fn send_message_to_client(org: &mut Org, message: Message) {
 
 static DID_COLOR: AtomicBool = AtomicBool::new(false);
 
+#[instrument(skip(scene))]
 async fn recv_simulation_frame(scene: &mut scene::Scene) -> Option<Result<Message, Error>> {
     sleep(std::time::Duration::from_millis(SIM_THROTTLE_MS)).await;
 
