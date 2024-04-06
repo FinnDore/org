@@ -81,7 +81,7 @@ pub struct SceneUpdate {
     pub color: Option<Color>,
 }
 
-#[instrument]
+#[instrument(skip(state))]
 pub async fn get_scene(State(state): State<SharedState>) -> Response {
     info!("Getting scene");
     let scene = state.scene.read().await.clone();

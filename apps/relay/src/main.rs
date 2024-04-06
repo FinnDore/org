@@ -96,8 +96,6 @@ async fn main() {
         .route("/game/:org", get(game_handler))
         .route("/scene/:org", get(get_scene))
         .with_state(state);
-    // let root = span!(tracing::Level::TRACE, "app_start", work_units = 2);
-    // let _enter = root.enter();
 
     let port = std::env::var("PORT").unwrap_or("3002".to_string());
     let host = format!("0.0.0.0:{}", port);
