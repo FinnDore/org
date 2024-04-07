@@ -14,17 +14,6 @@ datasource db {
     url      = env("DATABASE_URL")
 }
 
-model Post {
-    id        Int      @id @default(autoincrement())
-    name      String
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
-
-    createdBy   User   @relation(fields: [createdById], references: [id])
-    createdById String
-
-    @@index([name])
-}
 
 // Necessary for Next auth
 model Account {
@@ -42,6 +31,7 @@ model Account {
     session_state     String?
     user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+    @@map("ORG_Account")
     @@unique([provider, providerAccountId])
 }
 
@@ -51,6 +41,9 @@ model Session {
     userId       String
     expires      DateTime
     user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+
+    @@map("ORG_Session")
 }
 
 model User {
@@ -61,7 +54,8 @@ model User {
     image         String?
     accounts      Account[]
     sessions      Session[]
-    posts         Post[]
+
+    @@map("ORG_User")
 }
 
 model VerificationToken {
@@ -69,5 +63,6 @@ model VerificationToken {
     token      String   @unique
     expires    DateTime
 
+    @@map("ORG_VerificationToken")
     @@unique([identifier, token])
 }
