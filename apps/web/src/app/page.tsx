@@ -1,88 +1,37 @@
 "use client";
-import { api } from "@/trpc/react";
-import { Canvas, useFrame } from "@react-three/fiber";
-import { useRef } from "react";
-import { Group } from "three";
+
+import { SessionProvider, signIn, signOut, useSession } from "next-auth/react";
 
 export default function Home() {
     return (
-        <main className="relative flex min-h-screen bg-black">
-            <Canvas
-                style={{
-                    height: "100vh",
-                }}
-            >
-                <Scene />
-            </Canvas>
+        <main className="relative grid min-h-screen place-content-center bg-black text-white">
+            <SessionProvider>
+                <User />
+            </SessionProvider>
         </main>
     );
 }
 
-function Scene() {
-    const scene = api.scene.getSceneByOrg.useQuery({ orgName: "test" });
-    const sphereRef = useRef<Group | null>(null);
+function User() {
+    const session = useSession();
 
-    useFrame(() => {
-        const sphere = sphereRef.current;
-        if (sphere) {
-            sphere.rotation.y += Math.PI / 500;
-        }
-    });
+    if (session.data) {
+        return (
+            <div className="flex flex-col gap-2 text-center">
+                <img
+                    src={session.data.user.image}
+                    alt="user"
+                    className="rounded-full border border-white/40"
+                />
+                <p>{session.data.user.name}</p>
+                <button onClick={() => signOut()}>Sign out</button>
+            </div>
+        );
+    }
 
     return (
-        <>
-            <ambientLight intensity={0.5} />
-            <directionalLight position={[0, 0, 5]} />
-            <group ref={sphereRef}>
-                {scene.data?.items.map((item) => {
-                    switch (item.meshType) {
-                        case "Cube":
-                            return (
-                                <mesh
-                                    key={item.id}
-                                    rotation={item.rotation}
-                                    position={item.position}
-                                >
-                                    <boxGeometry args={[1]} />
-                                    <meshStandardMaterial color="red" />
-                                </mesh>
-                            );
-                        case "Sphere":
-                            return (
-                                <mesh
-                                    key={item.id}
-                                    rotation={item.rotation}
-                                    position={item.position}
-                                >
-                                    <sphereGeometry args={[1]} />
-                                    <meshStandardMaterial />
-                                </mesh>
-                            );
-                        case "Cylinder":
-                            return (
-                                <mesh
-                                    key={item.id}
-                                    position={item.position}
-                                    rotation={item.rotation}
-                                >
-                                    <cylinderGeometry args={[1]} />
-                                    <meshStandardMaterial />
-                                </mesh>
-                            );
-                        case "Plane":
-                            return (
-                                <mesh
-                                    key={item.id}
-                                    rotation={item.rotation}
-                                    position={item.position}
-                                >
-                                    <planeGeometry args={[1]} />
-                                    <meshStandardMaterial />
-                                </mesh>
-                            );
-                    }
-                })}
-            </group>
-        </>
+        <div>
+            <button onClick={() => signIn("discord")}>Sign in</button>
+        </div>
     );
 }
