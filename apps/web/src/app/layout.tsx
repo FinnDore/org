@@ -11,11 +11,11 @@ const inter = Inter({
     variable: "--font-sans",
 });
 
-export const metadata = {
-    title: "Org",
-    description: "Manage your org",
-    icons: [{ rel: "icon", url: "/favicon.ico" }],
-};
+// export const metadata = {
+//     title: "Org",
+//     description: "Manage your org",
+//     icons: [{ rel: "icon", url: "/favicon.ico" }],
+// };
 
 export default function RootLayout({
     children,
