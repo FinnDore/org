@@ -3,8 +3,10 @@ import "@/styles/globals.css";
 
 import { Inter } from "next/font/google";
 
+import { ThemeProvider } from "@/components/ui/theme-provider";
 import { TRPCReactProvider } from "@/trpc/react";
 import { SessionProvider } from "next-auth/react";
+import { Nav } from "./(components)/nav";
 
 const inter = Inter({
     subsets: ["latin"],
@@ -24,10 +26,22 @@ export default function RootLayout({
 }) {
     return (
         <html lang="en">
-            <body className={`font-sans ${inter.variable}`}>
-                <TRPCReactProvider>
-                    <SessionProvider>{children}</SessionProvider>
-                </TRPCReactProvider>
+            <body
+                className={`font-sans dark:bg-black dark:text-white ${inter.variable}`}
+            >
+                <ThemeProvider
+                    attribute="class"
+                    defaultTheme="system"
+                    enableSystem
+                    disableTransitionOnChange
+                >
+                    <TRPCReactProvider>
+                        <SessionProvider>
+                            <Nav />
+                            {children}
+                        </SessionProvider>
+                    </TRPCReactProvider>
+                </ThemeProvider>
             </body>
         </html>
     );
