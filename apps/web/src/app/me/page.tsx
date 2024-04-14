@@ -1,5 +1,6 @@
 "use client";
 import { Button } from "@/components/ui/button";
+import { Pfp } from "@/components/ui/pfp";
 import { useDebounceValue } from "@/lib/utils";
 import { api } from "@/trpc/react";
 import { signOut, useSession } from "next-auth/react";
@@ -36,13 +37,7 @@ function User() {
     });
     return (
         <div className="h-32">
-            {session.data && !loading && (
-                <img
-                    src={session.data.user.image!}
-                    alt="user"
-                    className="h-full rounded-full border border-black/40 dark:border-white/40"
-                />
-            )}
+            {session.data && !loading && <Pfp user={session.data.user} />}
             {loading && <button>login</button>}
         </div>
     );

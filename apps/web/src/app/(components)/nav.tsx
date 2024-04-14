@@ -8,16 +8,20 @@ import {
     DropdownMenuShortcut,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Pfp } from "@/components/ui/pfp";
 import { useDebounceValue } from "@/lib/utils";
 import { ExitIcon } from "@radix-ui/react-icons";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { useTheme } from "next-themes";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 export function Nav() {
     return (
         <nav className="flex justify-between p-4 px-8">
-            <h1 className="text-xl font-bold uppercase">Org</h1>
+            <Link href="/" prefetch={false}>
+                <h1 className="text-xl font-bold uppercase">Org</h1>
+            </Link>
             <User />
         </nav>
     );
@@ -45,18 +49,13 @@ function User() {
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <button>
-                            <img
-                                src={session.data.user.image!}
-                                alt="user"
-                                className="h-8 rounded-full border border-black/40 dark:border-white/40"
-                            />
+                            <Pfp user={session.data.user} className="h-8" />
                         </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => router.push("/me")}>
-                            profile
-                        </DropdownMenuItem>
-
+                        <Link href="/me">
+                            <DropdownMenuItem>profile</DropdownMenuItem>
+                        </Link>
                         <DropdownMenuItem
                             onClick={() => theme.setTheme(nextTheme)}
                         >
