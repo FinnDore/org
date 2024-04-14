@@ -6,6 +6,7 @@ import { Inter } from "next/font/google";
 import { ThemeProvider } from "@/components/ui/theme-provider";
 import { TRPCReactProvider } from "@/trpc/react";
 import { SessionProvider } from "next-auth/react";
+import { AxiomWebVitals } from "next-axiom";
 import { Nav } from "./(components)/nav";
 
 const inter = Inter({
@@ -29,6 +30,7 @@ export default function RootLayout({
             <body
                 className={`font-sans dark:bg-black dark:text-white ${inter.variable}`}
             >
+                <AxiomWebVitals />
                 <ThemeProvider
                     attribute="class"
                     defaultTheme="system"
