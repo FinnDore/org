@@ -2,5 +2,10 @@
     "name": "relay",
     "scripts": {
         "dev": "envroment=development AUTH_TOKEN=1 cargo watch -x run"
+    },
+    "packageManager": "pnpm@8.15.7",
+    "engines": {
+        "pnpm": "8.15.7",
+        "node": "v20.12.2"
     }
 }
