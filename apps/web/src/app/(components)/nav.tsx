@@ -1,77 +1,85 @@
 "use session";
-import { useSession } from "next-auth/react";
-import { useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useDebounceValue } from "@/lib/utils";
+import { signIn, signOut, useSession } from "next-auth/react";
+import { useTheme } from "next-themes";
+import { useRouter } from "next/navigation";
 
 export function Nav() {
     return (
         <nav className="flex justify-between p-4 px-8">
             <h1 className="text-xl font-bold uppercase">Org</h1>
-            <div className="ms-auto flex gap-4">
-                <User />
-            </div>
+            <User />
         </nav>
     );
 }
 
 function User() {
     const session = useSession();
+    const router = useRouter();
 
     const loading = useDebounceValue(session.status === "loading", {
         defaultValue: false,
     });
+    const theme = useTheme();
+    const nextTheme =
+        theme.theme === "light"
+            ? "dark"
+            : theme.theme === "dark"
+              ? "system"
+              : theme.theme === "system"
+                ? "light"
+                : "light";
     return (
-        <div className="h-10">
+        <div className="relative h-8">
             {session.data && !loading && (
-                <img
-                    src={session.data.user.image!}
-                    alt="user"
-                    className="h-full rounded-full border border-black/40 dark:border-white/40"
-                />
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <button>
+                            <img
+                                src={session.data.user.image!}
+                                alt="user"
+                                className="h-8 rounded-full border border-black/40 dark:border-white/40"
+                            />
+                        </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => router.push("/me")}>
+                            profile
+                        </DropdownMenuItem>
+
+                        <DropdownMenuItem
+                            onClick={() => theme.setTheme(nextTheme)}
+                        >
+                            theme: {theme.theme}
+                        </DropdownMenuItem>
+
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => void signOut()}>
+                            logout
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            )}
+            {!session.data && !loading && (
+                <Button
+                    variant="link"
+                    className="text-lg"
+                    onClick={() => void signIn("discord")}
+                >
+                    login
+                </Button>
             )}
             {loading && <button>login</button>}
         </div>
     );
-}
-
-function debounceTimeLeft(debounceTime: number, latSetTime: Date) {
-    return Math.abs(Date.now() - (latSetTime.getTime() + debounceTime));
-}
-
-export function useDebounceValue<T extends number | string | boolean>(
-    value: T | null,
-    {
-        delay = 250,
-        defaultValue = null,
-    }: {
-        delay?: number;
-        defaultValue: T | null;
-    } = { delay: 250, defaultValue: null },
-) {
-    const [debouncedValue, setVal] = useState<T | null>(defaultValue);
-    const lastSet = useRef<Date>(new Date(new Date().getTime()));
-    const timeout = useRef<NodeJS.Timeout>();
-
-    useEffect(() => {
-        clearTimeout(timeout.current);
-        if (!debounceTimeLeft(delay, lastSet.current)) {
-            setVal(value);
-            lastSet.current = new Date();
-        } else {
-            timeout.current = setTimeout(
-                () => {
-                    lastSet.current = new Date();
-                    setVal(value);
-                },
-                debounceTimeLeft(delay, lastSet.current),
-            );
-        }
-
-        return () => {
-            clearTimeout(timeout.current);
-        };
-    }, [delay, value]);
-
-    return debouncedValue;
 }
 
 {
