@@ -3,8 +3,9 @@
  * for Docker builds.
  */
 await import("./src/env.js");
+const { withAxiom } = await import("next-axiom");
 
 /** @type {import("next").NextConfig} */
 const config = {};
 
-export default config;
+export default withAxiom(config);
