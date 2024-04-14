@@ -5,9 +5,11 @@ import {
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuSeparator,
+    DropdownMenuShortcut,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useDebounceValue } from "@/lib/utils";
+import { ExitIcon } from "@radix-ui/react-icons";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
@@ -64,6 +66,9 @@ function User() {
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => void signOut()}>
                             logout
+                            <DropdownMenuShortcut>
+                                <ExitIcon />
+                            </DropdownMenuShortcut>
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
