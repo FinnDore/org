@@ -21,12 +21,12 @@ export function DynamicIsland() {
         disrespectUserMotionPreference: true,
     });
     return (
-        <div ref={parent}>
+        <div>
             <div
                 onClick={() => {
                     orgName.setOrgName("largeeeeeeeaaaaaaaaa");
                 }}
-                className="rounded-full bg-black p-12 py-2 text-white shadow-xl dark:bg-white dark:text-black"
+                className="rounded-full bg-black p-12 py-2 text-white shadow-xl"
                 id="dyamicIsland"
             >
                 {orgName.orgName}

@@ -24,8 +24,7 @@ CREATE TABLE `ORG_Session` (
     `userId` VARCHAR(191) NOT NULL,
     `expires` DATETIME(3) NOT NULL,
 
-    UNIQUE INDEX `ORG_Session_sessionToken_key`(`sessionToken`),
-    PRIMARY KEY (`id`)
+    UNIQUE INDEX `ORG_Session_sessionToken_key`(`sessionToken`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
@@ -36,8 +35,7 @@ CREATE TABLE `ORG_User` (
     `emailVerified` DATETIME(3) NULL,
     `image` VARCHAR(191) NULL,
 
-    UNIQUE INDEX `ORG_User_email_key`(`email`),
-    PRIMARY KEY (`id`)
+    UNIQUE INDEX `ORG_User_email_key`(`email`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
