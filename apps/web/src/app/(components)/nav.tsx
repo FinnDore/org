@@ -1,4 +1,11 @@
 "use session";
+import {
+    Breadcrumb,
+    BreadcrumbItem,
+    BreadcrumbLink,
+    BreadcrumbList,
+    BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -14,19 +21,60 @@ import { ExitIcon } from "@radix-ui/react-icons";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { useTheme } from "next-themes";
 import Link from "next/link";
-import { DynamicIsland } from "./dynamic-island";
+import { usePathname } from "next/navigation";
+import { create } from "zustand";
+
+type OrgState = {
+    orgName: string;
+    setOrgName: (orgName: string) => void;
+};
+const useStore = create<OrgState>((set) => ({
+    orgName: "verigoers",
+    setOrgName: (orgName: string) => set(() => ({ orgName })),
+}));
 
 export function Nav() {
     return (
-        <nav className="grid grid-cols-3 justify-between p-4 px-8">
+        <nav className="flex  p-4 px-0">
             <Link href="/" prefetch={false} className="my-auto">
                 <h1 className="text-xl font-bold uppercase">Org</h1>
             </Link>
-            <div className="flex justify-center">
-                <DynamicIsland />
+
+            <div className="my-auto ms-6">
+                <BreadCrumbs />
             </div>
-            <User />
+
+            <div className="ms-auto">
+                <User />
+            </div>
         </nav>
+    );
+}
+
+export function BreadCrumbs() {
+    const store = useStore();
+    const path = usePathname();
+
+    const segments = path.split("/").filter(Boolean);
+
+    if (segments.length < 2) return;
+
+    return (
+        <Breadcrumb>
+            <BreadcrumbList>
+                {segments.map((segment, i) => {
+                    const href = `/${segments.slice(0, i + 1).join("/")}`;
+                    return (
+                        <BreadcrumbItem key={segment}>
+                            <BreadcrumbLink href={href}>
+                                {segment}
+                            </BreadcrumbLink>
+                            {i < segments.length - 1 && <BreadcrumbSeparator />}
+                        </BreadcrumbItem>
+                    );
+                })}
+            </BreadcrumbList>
+        </Breadcrumb>
     );
 }
 
@@ -44,7 +92,7 @@ function User() {
                 : "light";
 
     return (
-        <div className="relative flex h-8 justify-end">
+        <div className="relative flex h-8">
             {session.data && !loading && (
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>

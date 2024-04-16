@@ -4,6 +4,7 @@ import { Pfp } from "@/components/ui/pfp";
 import { useDebounceValue } from "@/lib/utils";
 import { api } from "@/trpc/react";
 import { signOut, useSession } from "next-auth/react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 export default function Home() {
@@ -14,6 +15,9 @@ export default function Home() {
         <main className="relative grid min-h-screen place-content-center">
             <div className="flex flex-col justify-center gap-4">
                 <User />
+                <Link href="/me/orgs">
+                    <Button className="w-full">My orgs</Button>
+                </Link>
                 <Button
                     variant="destructive"
                     onClick={async () => {
