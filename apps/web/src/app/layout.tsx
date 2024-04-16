@@ -27,23 +27,24 @@ export default function RootLayout({
 }) {
     return (
         <html lang="en">
-            <body
-                className={`font-sans dark:bg-black dark:text-white ${inter.variable}`}
-            >
-                <AxiomWebVitals />
-                <ThemeProvider
-                    attribute="class"
-                    defaultTheme="system"
-                    enableSystem
-                    disableTransitionOnChange
-                >
-                    <TRPCReactProvider>
-                        <SessionProvider>
-                            <Nav />
-                            {children}
-                        </SessionProvider>
-                    </TRPCReactProvider>
-                </ThemeProvider>
+            <body className={`font-sans  ${inter.variable}`}>
+                <div className="mx-auto sm:px-12 lg:max-w-screen-lg">
+                    <AxiomWebVitals />
+
+                    <ThemeProvider
+                        attribute="class"
+                        defaultTheme="system"
+                        enableSystem
+                        disableTransitionOnChange
+                    >
+                        <TRPCReactProvider>
+                            <SessionProvider>
+                                <Nav />
+                                {children}
+                            </SessionProvider>
+                        </TRPCReactProvider>
+                    </ThemeProvider>
+                </div>
             </body>
         </html>
     );
