@@ -7,9 +7,9 @@ export const meRouter = createTRPCRouter({
         const userId = opts.ctx.session.user.id;
 
         await db.$transaction([
-            db.$executeRaw`DELETE FROM ORG_User WHERE id = ${userId.user.id}`,
-            db.$executeRaw`DELETE FROM ORG_Account WHERE userId = ${userId.user.id}`,
-            db.$executeRaw`DELETE FROM ORG_Session WHERE userId = ${userId.user.id}`,
+            db.$executeRaw`DELETE FROM ORG_User WHERE id = ${userId}`,
+            db.$executeRaw`DELETE FROM ORG_Account WHERE userId = ${userId}`,
+            db.$executeRaw`DELETE FROM ORG_Session WHERE userId = ${userId}`,
         ]);
     }),
 
