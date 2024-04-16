@@ -14,14 +14,17 @@ import { ExitIcon } from "@radix-ui/react-icons";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { useTheme } from "next-themes";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { DynamicIsland } from "./dynamic-island";
 
 export function Nav() {
     return (
-        <nav className="flex justify-between p-4 px-8">
-            <Link href="/" prefetch={false}>
+        <nav className="grid grid-cols-3 justify-between p-4 px-8">
+            <Link href="/" prefetch={false} className="my-auto">
                 <h1 className="text-xl font-bold uppercase">Org</h1>
             </Link>
+            <div className="flex justify-center">
+                <DynamicIsland />
+            </div>
             <User />
         </nav>
     );
@@ -29,11 +32,7 @@ export function Nav() {
 
 function User() {
     const session = useSession();
-    const router = useRouter();
-
-    const loading = useDebounceValue(session.status === "loading", {
-        defaultValue: false,
-    });
+    const loading = useDebounceValue(session.status === "loading");
     const theme = useTheme();
     const nextTheme =
         theme.theme === "light"
@@ -43,8 +42,9 @@ function User() {
               : theme.theme === "system"
                 ? "light"
                 : "light";
+
     return (
-        <div className="relative h-8">
+        <div className="relative flex h-8 justify-end">
             {session.data && !loading && (
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -72,7 +72,7 @@ function User() {
                     </DropdownMenuContent>
                 </DropdownMenu>
             )}
-            {!session.data && !loading && (
+            {session.status === "unauthenticated" && !loading && (
                 <Button
                     variant="link"
                     className="text-lg"
@@ -81,11 +81,9 @@ function User() {
                     login
                 </Button>
             )}
-            {loading && <button>login</button>}
         </div>
     );
 }
 
 {
-    /* <ThemeToggle />; */
 }
