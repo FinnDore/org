@@ -6,18 +6,18 @@ body {
     @apply dark:bg-black dark:text-white;
 }
 body::after {
+    @apply opacity-10 invert dark:opacity-20 dark:invert-0;
     background-repeat: repeat;
     pointer-events: none;
     content: " ";
     background-image: url(/NOISE.webp);
     background-position: 0px 0px;
     background-size: 250px;
-    opacity: 0.15;
     left: 0%;
     top: 0%;
     z-index: 0;
     width: 100%;
     display: block;
     position: absolute;
-    height: 100%;
+    height: 100vh;
 }
