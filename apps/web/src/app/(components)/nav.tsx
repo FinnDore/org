@@ -52,11 +52,10 @@ export function Nav() {
 }
 
 export function BreadCrumbs() {
-    const store = useStore();
     const path = usePathname();
-
     const segments = path.split("/").filter(Boolean);
 
+    console.log(segments);
     if (segments.length < 2) return;
 
     return (
@@ -65,12 +64,14 @@ export function BreadCrumbs() {
                 {segments.map((segment, i) => {
                     const href = `/${segments.slice(0, i + 1).join("/")}`;
                     return (
-                        <BreadcrumbItem key={segment}>
-                            <BreadcrumbLink href={href}>
-                                {segment}
-                            </BreadcrumbLink>
+                        <>
+                            <BreadcrumbItem key={segment}>
+                                <BreadcrumbLink href={href}>
+                                    {segment}
+                                </BreadcrumbLink>
+                            </BreadcrumbItem>
                             {i < segments.length - 1 && <BreadcrumbSeparator />}
-                        </BreadcrumbItem>
+                        </>
                     );
                 })}
             </BreadcrumbList>
