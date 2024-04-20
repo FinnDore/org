@@ -1,6 +1,7 @@
 import { sceneRouter } from "@/server/api/routers/scene";
 import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
 import { meRouter } from "./routers/me";
+import { orgRouter } from "./routers/org";
 
 /**
  * This is the primary router for your server.
@@ -10,6 +11,7 @@ import { meRouter } from "./routers/me";
 export const appRouter = createTRPCRouter({
     scene: sceneRouter,
     me: meRouter,
+    org: orgRouter,
 });
 
 // export type definition of API

@@ -36,15 +36,16 @@ export default function Home() {
                 )}
                 {!debouncedLoading &&
                     orgsQuery.data?.map((org) => (
-                        <div
+                        <Link
                             key={org.id}
                             className={cn(
                                 "relative flex w-full gap-3 rounded-md border border-black/50 bg-white px-6 py-4 transition-all hover:border-black dark:border-white/50 dark:bg-black dark:hover:border-white",
                             )}
+                            href={`/org/${org.id}`}
                         >
                             <h2>{org.name}</h2>
                             <p>{org.description}</p>
-                        </div>
+                        </Link>
                     ))}
             </div>
         </>

@@ -1,4 +1,4 @@
-"use session";
+"use client";
 import {
     Breadcrumb,
     BreadcrumbItem,
