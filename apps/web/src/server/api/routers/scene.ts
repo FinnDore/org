@@ -12,6 +12,7 @@ export type SceneItem = {
     id: string;
     position: [number, number, number];
     rotation: [number, number, number];
+    color: string;
 };
 
 export const MeshType = {
