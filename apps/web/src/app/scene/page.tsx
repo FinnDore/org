@@ -140,9 +140,9 @@ function Scene() {
                 //     targetPos[2] ?? 0,
                 // );
                 current.position.set(
-                    damp(current.position.x, targetPos[0] ?? 0, 0.45, 0.01),
-                    damp(current.position.y, targetPos[1] ?? 0, 0.45, 0.01),
-                    damp(current.position.z, targetPos[2] ?? 0, 0.45, 0.01),
+                    damp(current.position.x, targetPos[0] ?? 0, 1.45, 0.01),
+                    damp(current.position.y, targetPos[1] ?? 0, 1.45, 0.01),
+                    damp(current.position.z, targetPos[2] ?? 0, 1.45, 0.01),
                 );
                 const targetRot = target.rotation;
                 current.rotation.set(
