@@ -149,7 +149,7 @@ function Scene() {
         <>
             <OrbitControls camera={cameraRef.current} />
             <EffectComposer enableNormalPass={false}>
-                <N8AO aoRadius={10} intensity={1} />
+                <N8AO aoRadius={40} intensity={1} />
                 <Bloom
                     luminanceThreshold={1}
                     intensity={0.5}
