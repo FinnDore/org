@@ -36,7 +36,7 @@ pub async fn game_handler(
     State(state): State<SharedState>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
-    info!(org_id, "Gameserver establising connection");
+    info!(org_id, ?headers, "Gameserver establising connection");
     let auth_header = headers
         .get("authorization")
         .and_then(|header| header.to_str().ok());
