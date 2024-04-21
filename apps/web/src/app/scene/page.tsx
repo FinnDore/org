@@ -18,10 +18,15 @@ import { PerspectiveCamera } from "three";
 
 export default function Home() {
     return (
-        <main className="relative flex min-h-screen bg-black">
+        <main className="pointer-events-none relative flex min-h-screen ">
             <Canvas
                 style={{
+                    pointerEvents: "auto",
                     height: "100vh",
+                    position: "fixed",
+                    left: 0,
+                    right: 0,
+                    top: 0,
                 }}
             >
                 <Scene />
@@ -172,9 +177,8 @@ function Scene() {
 
             <perspectiveCamera
                 scale={(viewport.width / 5) * 1}
-                orbi
                 fov={40}
-                ref={cameraRef}
+                ref={cameraRef as any}
                 position={[0, 0, 2000]}
                 rotation={[90, 55, 180]}
                 near={0.1}
