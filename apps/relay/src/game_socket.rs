@@ -26,7 +26,7 @@ use rand::Rng;
 use tokio::{select, sync::Mutex, time::sleep};
 use tracing::{error, info, instrument, trace};
 
-const MESSAGE_THROTTLE_MS: u64 = 105;
+const MESSAGE_THROTTLE_MS: u64 = 25;
 const SIM_THROTTLE_MS: u64 = 25;
 
 #[instrument(skip(ws, state, headers))]

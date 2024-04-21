@@ -2,10 +2,11 @@
 import { SceneItem } from "@/server/api/routers/scene";
 import { api } from "@/trpc/react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Bloom, EffectComposer, N8AO } from "@react-three/postprocessing";
 import { useEffect, useRef, useState } from "react";
 import { damp } from "three/src/math/MathUtils.js";
 
-import { OrbitControls } from "@react-three/drei";
+import { OrbitControls, RoundedBox } from "@react-three/drei";
 import { PerspectiveCamera } from "three";
 
 export default function Home() {
@@ -65,7 +66,7 @@ function useWebsocket(opts: {
 }
 
 function Scene() {
-    const { scene: theScene, set } = useThree();
+    const { scene: theScene, set, viewport } = useThree();
     const cameraRef = useRef<PerspectiveCamera>();
     // This makes sure that size-related calculations are proper
     // Every call to useThree will return this camera instead of the default camera
@@ -121,16 +122,16 @@ function Scene() {
                     continue;
                 }
                 const targetPos = target.position;
-                current.position.set(
-                    targetPos[0] ?? 0,
-                    targetPos[1] ?? 0,
-                    targetPos[2] ?? 0,
-                );
                 // current.position.set(
-                //     damp(current.position.x, targetPos[0] ?? 0, 0.45, 0.01),
-                //     damp(current.position.y, targetPos[1] ?? 0, 0.45, 0.01),
-                //     damp(current.position.z, targetPos[2] ?? 0, 0.45, 0.01),
+                //     targetPos[0] ?? 0,
+                //     targetPos[1] ?? 0,
+                //     targetPos[2] ?? 0,
                 // );
+                current.position.set(
+                    damp(current.position.x, targetPos[0] ?? 0, 0.45, 0.01),
+                    damp(current.position.y, targetPos[1] ?? 0, 0.45, 0.01),
+                    damp(current.position.z, targetPos[2] ?? 0, 0.45, 0.01),
+                );
                 const targetRot = target.rotation;
                 current.rotation.set(
                     damp(current.rotation.x, targetRot[0] ?? 0, 0.45, 0.01),
@@ -138,7 +139,7 @@ function Scene() {
                     damp(current.rotation.z, targetRot[2] ?? 0, 0.45, 0.01),
                 );
                 current.rotation.set(targetRot[0], targetRot[1], targetRot[2]);
-                current.material.color.set(target.color);
+                (current as any).material.color.set(target.color);
             }
         }
     });
@@ -147,12 +148,24 @@ function Scene() {
     return (
         <>
             <OrbitControls camera={cameraRef.current} />
+            <EffectComposer enableNormalPass={false}>
+                <N8AO aoRadius={10} intensity={1} />
+                <Bloom
+                    luminanceThreshold={1}
+                    intensity={0.5}
+                    levels={10}
+                    mipmapBlur
+                />
+            </EffectComposer>
 
             <perspectiveCamera
+                scale={(viewport.width / 5) * 1}
                 orbi
+                fov={40}
                 ref={cameraRef}
                 position={[0, 0, 2000]}
                 rotation={[90, 55, 180]}
+                near={0.1}
                 far={100000}
             />
             <ambientLight intensity={1} />
@@ -161,15 +174,20 @@ function Scene() {
                 switch (item.meshType) {
                     case "Cube":
                         return (
-                            <mesh
+                            <RoundedBox
                                 key={item.id}
                                 name={item.id}
+                                scale={[100, 30, 100]}
+                                radius={0.25}
                                 rotation={item.rotation}
                                 position={item.position}
                             >
-                                <boxGeometry args={[100, 100, 100]} />
-                                <meshStandardMaterial color={item.color} />
-                            </mesh>
+                                <meshStandardMaterial
+                                    color={item.color}
+                                    emissive={item.color}
+                                    emissiveIntensity={10}
+                                />
+                            </RoundedBox>
                         );
                     case "Sphere":
                         return (

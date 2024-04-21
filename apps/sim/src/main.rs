@@ -10,18 +10,14 @@ use serde::Deserialize;
 use serde::Serialize;
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite;
-use tokio_tungstenite::tungstenite::handshake::client::generate_key;
 use tokio_tungstenite::tungstenite::handshake::client::Request;
 use tokio_tungstenite::tungstenite::http::uri;
 use tokio_tungstenite::tungstenite::http::HeaderValue;
-use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use tokio_tungstenite::tungstenite::Message;
-use tracing::error;
 use tracing::info;
 use tracing::instrument;
-use tracing::trace;
 
-/// Simple program to greet a person
+/// Simulation of a game server
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
@@ -48,6 +44,7 @@ pub struct SceneUpdate {
     pub id: String,
     pub rotation: Option<(f32, f32, f32)>,
     pub position: Option<(f32, f32, f32)>,
+    pub color: Option<String>,
 }
 
 #[tokio::main]
@@ -55,14 +52,13 @@ pub struct SceneUpdate {
 async fn main() {
     tracing::subscriber::set_global_default(
         tracing_subscriber::FmtSubscriber::builder()
-            .with_max_level(tracing::Level::TRACE)
+            .with_max_level(tracing::Level::INFO)
             .finish(),
     )
     .expect("Failed to set subscriber");
     let args = Args::parse();
 
     let frames = read(path::Path::new(&args.file)).expect("Failed to read file");
-    // let url = url::Url::parse(&connect_addr).unwrap();
 
     let scene_updates = serde_json::from_slice::<Vec<Vec<SceneUpdate>>>(&frames)
         .expect("Failed to parse json")
@@ -98,37 +94,22 @@ async fn main() {
         .body(())
         .expect("Failed to build request");
 
-    error!("Connecting to server");
-
     let (ws_stream, _) = connect_async(request).await.expect("Failed to connect");
 
     info!("WebSocket handshake has been successfully completed");
 
-    let (mut write, read) = ws_stream.split();
+    let (mut write, _) = ws_stream.split();
 
     info!("Running sim ");
     loop {
         for update in scene_updates.iter() {
-            tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
             for frame in update.iter() {
                 write
                     .send(frame.clone())
                     .await
                     .expect("Failed to send message");
-                trace!(
-                    frame = frame
-                        .clone()
-                        .into_text()
-                        .expect("failed to unwrap frame for logging"),
-                    "Sent frame"
-                );
             }
         }
     }
-    // let ws_to_stdout = {
-    //     read.for_each(|message| async {
-    //         let data = message.unwrap().into_data();
-    //         tokio::io::stdout().write_all(&data).await.unwrap();
-    //     })
-    // };
 }
