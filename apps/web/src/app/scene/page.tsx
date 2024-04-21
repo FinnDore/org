@@ -2,11 +2,18 @@
 import { SceneItem } from "@/server/api/routers/scene";
 import { api } from "@/trpc/react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Bloom, EffectComposer, N8AO } from "@react-three/postprocessing";
+import {
+    Bloom,
+    ChromaticAberration,
+    EffectComposer,
+    N8AO,
+    Noise,
+} from "@react-three/postprocessing";
 import { useEffect, useRef, useState } from "react";
 import { damp } from "three/src/math/MathUtils.js";
 
 import { OrbitControls, RoundedBox } from "@react-three/drei";
+import { BlendFunction } from "postprocessing";
 import { PerspectiveCamera } from "three";
 
 export default function Home() {
@@ -140,21 +147,26 @@ function Scene() {
                 );
                 current.rotation.set(targetRot[0], targetRot[1], targetRot[2]);
                 (current as any).material.color.set(target.color);
+                (current as any).material.emissive.set(target.color);
             }
         }
     });
 
-    const config = { fov: 95, position: [0, 0, 10] } as any;
     return (
         <>
             <OrbitControls camera={cameraRef.current} />
             <EffectComposer enableNormalPass={false}>
-                <N8AO aoRadius={40} intensity={1} />
-                <Bloom
-                    luminanceThreshold={1}
-                    intensity={0.5}
-                    levels={10}
-                    mipmapBlur
+                <N8AO aoRadius={400} intensity={1} />
+                <Bloom intensity={0.5} levels={10} mipmapBlur dithering />
+                <ChromaticAberration
+                    blendFunction={BlendFunction.NORMAL} // blend mode
+                    offset={[0.0, 0.0015] as any} // color offset
+                    radialModulation
+                    modulationOffset={1}
+                />
+                <Noise
+                    premultiply // enables or disables noise premultiplication
+                    blendFunction={BlendFunction.DARKEN} // blend mode
                 />
             </EffectComposer>
 
@@ -185,7 +197,7 @@ function Scene() {
                                 <meshStandardMaterial
                                     color={item.color}
                                     emissive={item.color}
-                                    emissiveIntensity={10}
+                                    emissiveIntensity={20}
                                 />
                             </RoundedBox>
                         );
