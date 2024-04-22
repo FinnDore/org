@@ -160,21 +160,22 @@ function Scene() {
     return (
         <>
             <OrbitControls camera={cameraRef.current} />
-            <EffectComposer enableNormalPass={false}>
-                <N8AO aoRadius={400} intensity={1} />
-                <Bloom intensity={0.5} levels={10} mipmapBlur dithering />
-                <ChromaticAberration
-                    blendFunction={BlendFunction.NORMAL} // blend mode
-                    offset={[0.0, 0.0015] as any} // color offset
-                    radialModulation
-                    modulationOffset={1}
-                />
-                <Noise
-                    premultiply // enables or disables noise premultiplication
-                    blendFunction={BlendFunction.DARKEN} // blend mode
-                />
-            </EffectComposer>
-
+            {false && (
+                <EffectComposer enableNormalPass={false}>
+                    <N8AO aoRadius={400} intensity={1} />
+                    <Bloom intensity={0.5} levels={10} mipmapBlur dithering />
+                    <ChromaticAberration
+                        blendFunction={BlendFunction.NORMAL} // blend mode
+                        offset={[0.0, 0.0015] as any} // color offset
+                        radialModulation
+                        modulationOffset={1}
+                    />
+                    <Noise
+                        premultiply // enables or disables noise premultiplication
+                        blendFunction={BlendFunction.DARKEN} // blend mode
+                    />
+                </EffectComposer>
+            )}
             <perspectiveCamera
                 scale={(viewport.width / 5) * 1}
                 fov={40}

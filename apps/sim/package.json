@@ -1,7 +1,7 @@
 {
     "name": "sim",
     "scripts": {
-        "dev": "cargo watch -x \"run -- --file demo/jump.json --auth-token 1 --server ws://0.0.0.0:3002 --game-id finn\""
+        "dev": "cargo watch -x \"run -- --file demo/dem.json --auth-token 1 --server ws://0.0.0.0:3002 --game-id finn\""
     },
     "packageManager": "pnpm@8.15.7",
     "engines": {
