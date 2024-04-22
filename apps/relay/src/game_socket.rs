@@ -1,5 +1,4 @@
 use std::{
-    io::Write,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -152,7 +151,6 @@ async fn send_message_task(
             info!("Org not found cannot send message exiting");
             return;
         }
-
         send_message_to_client(org.unwrap(), message_to_send).await
     }
 }
