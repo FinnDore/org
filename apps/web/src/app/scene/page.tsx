@@ -16,6 +16,9 @@ import { OrbitControls, RoundedBox } from "@react-three/drei";
 import { BlendFunction } from "postprocessing";
 import { PerspectiveCamera } from "three";
 
+const useSmoothing = false;
+const makePretty = true;
+
 export default function Home() {
     return (
         <main className="pointer-events-none relative flex min-h-screen ">
@@ -26,7 +29,7 @@ export default function Home() {
                     position: "fixed",
                     left: 0,
                     right: 0,
-                    top: 0,
+                    bottom: 0,
                 }}
             >
                 <Scene />
@@ -134,23 +137,27 @@ function Scene() {
                     continue;
                 }
                 const targetPos = target.position;
-                // current.position.set(
-                //     targetPos[0] ?? 0,
-                //     targetPos[1] ?? 0,
-                //     targetPos[2] ?? 0,
-                // );
-                current.position.set(
-                    damp(current.position.x, targetPos[0] ?? 0, 1.45, 0.01),
-                    damp(current.position.y, targetPos[1] ?? 0, 1.45, 0.01),
-                    damp(current.position.z, targetPos[2] ?? 0, 1.45, 0.01),
-                );
+                if (!useSmoothing) {
+                    current.position.set(
+                        targetPos[0] ?? 0,
+                        targetPos[1] ?? 0,
+                        targetPos[2] ?? 0,
+                    );
+                } else {
+                    current.position.set(
+                        damp(current.position.x, targetPos[0] ?? 0, 1.45, 0.01),
+                        damp(current.position.y, targetPos[1] ?? 0, 1.45, 0.01),
+                        damp(current.position.z, targetPos[2] ?? 0, 1.45, 0.01),
+                    );
+                }
                 const targetRot = target.rotation;
                 current.rotation.set(
                     damp(current.rotation.x, targetRot[0] ?? 0, 0.45, 0.01),
                     damp(current.rotation.y, targetRot[1] ?? 0, 0.45, 0.01),
                     damp(current.rotation.z, targetRot[2] ?? 0, 0.45, 0.01),
                 );
-                current.rotation.set(targetRot[0], targetRot[1], targetRot[2]);
+                current.rotation.set(0, targetRot[0], 0);
+
                 (current as any).material.color.set(target.color);
                 (current as any).material.emissive.set(target.color);
             }
@@ -160,7 +167,7 @@ function Scene() {
     return (
         <>
             <OrbitControls camera={cameraRef.current} />
-            {false && (
+            {makePretty && (
                 <EffectComposer enableNormalPass={false}>
                     <N8AO aoRadius={400} intensity={1} />
                     <Bloom intensity={0.5} levels={10} mipmapBlur dithering />

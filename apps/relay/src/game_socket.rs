@@ -153,14 +153,6 @@ async fn send_message_task(
             return;
         }
 
-        let mut file = std::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .append(true)
-            .open("../dem.json")
-            .unwrap();
-        writeln!(file, "[{}],", messages).expect("Failed to write to file");
-        // write message to send to file
         send_message_to_client(org.unwrap(), message_to_send).await
     }
 }
