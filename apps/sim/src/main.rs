@@ -38,13 +38,19 @@ struct Args {
     game_id: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all(serialize = "camelCase"))]
 pub struct SceneUpdate {
     pub id: String,
     pub rotation: Option<(f32, f32, f32)>,
     pub position: Option<(f32, f32, f32)>,
     pub color: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct InitScene {
+    pub name: String,
+    pub items: Vec<SceneUpdate>,
 }
 
 #[tokio::main]
@@ -60,8 +66,15 @@ async fn main() {
 
     let frames = read(path::Path::new(&args.file)).expect("Failed to read file");
 
-    let scene_updates = serde_json::from_slice::<Vec<Vec<SceneUpdate>>>(&frames)
-        .expect("Failed to parse json")
+    let frames =
+        serde_json::from_slice::<Vec<Vec<SceneUpdate>>>(&frames).expect("Failed to parse json");
+
+    let body = InitScene {
+        name: args.file,
+        items: frames[0].clone(),
+    };
+
+    let scene_updates = frames
         .iter()
         .map(|frame| {
             frame
@@ -91,7 +104,7 @@ async fn main() {
             "authorization",
             HeaderValue::from_str(&args.auth_token).expect("Failed to parse auth header"),
         )
-        .body(())
+        .body(body)
         .expect("Failed to build request");
 
     let (ws_stream, _) = connect_async(request).await.expect("Failed to connect");
