@@ -8,31 +8,39 @@ use std::{
 
 use crate::{
     org::{self, Org},
-    scene::{self, create_test_scene, SceneUpdate},
+    scene::{self, create_test_scene, Scene, SceneUpdate},
     util::ErrorFormatter,
     SharedState,
 };
 use axum::{
+    body::Body,
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
         Path, State,
     },
-    http::{status, HeaderMap},
+    http::{status, uri::Scheme, HeaderMap},
     response::IntoResponse,
-    Error,
+    Error, Json,
 };
 use futures_util::future::select_all;
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 use tokio::{select, sync::Mutex, time::sleep};
 use tracing::{error, info, instrument, trace};
 
 const MESSAGE_THROTTLE_MS: u64 = 25;
 const SIM_THROTTLE_MS: u64 = 25;
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct InitScene {
+    pub scene: Vec<Scene>,
+}
+
 #[instrument(skip(ws, state, headers))]
 pub async fn game_handler(
     ws: WebSocketUpgrade,
     Path(org_id): Path<String>,
+    Json(body): Json<InitScene>,
     State(state): State<SharedState>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
@@ -53,16 +61,16 @@ pub async fn game_handler(
         return status::StatusCode::UNAUTHORIZED.into_response();
     }
 
-    ws.on_upgrade(|socket| handle_game_socket(socket, org_id, state))
+    ws.on_upgrade(|socket| handle_game_socket(socket, org_id, state, scene))
 }
 
 #[instrument(skip(socket, state))]
-async fn handle_game_socket(socket: WebSocket, org_id: String, state: SharedState) {
+async fn handle_game_socket(socket: WebSocket, org_id: String, scene: Scene, state: SharedState) {
     // TODO reject new connections
     let mut orgs = state.orgs.lock().await;
     let org = orgs
         .entry(org_id.clone())
-        .or_insert_with(|| org::Org::new(vec![], true, org_id.clone()));
+        .or_insert_with(|| org::Org::new(vec![], true, org_id.clone(), scene));
 
     info!(
         client_count = org.clients.len(),
